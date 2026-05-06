@@ -1,0 +1,39 @@
+{
+  "name": "mcq-service",
+  "version": "1.0.0",
+  "description": "MCQ service for Xynapse",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo 'Run your k6/jest tests here'",
+    "lint": "eslint . --fix"
+  },
+  "dependencies": {
+    "@xynapse/common": "*",
+    "@upstash/redis": "^1.36.2",
+    "axios": "^1.13.5",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.9.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "ejs": "^4.0.1",
+    "express": "^4.18.2",
+    "googleapis": "^171.4.0",
+    "jsonwebtoken": "^9.0.0",
+    "mongoose": "^7.0.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "nodemailer": "^8.0.1",
+    "slugify": "^1.6.6",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "eslint": "^8.0.0"
+  }
+}

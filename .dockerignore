@@ -1,0 +1,36 @@
+# Dependency directories
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+build
+.next
+out
+
+# Version control
+.git
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (No need to copy them inside the image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE settings
+.vscode
+.idea
+
+# Local environment files
+.env
+.env.local
+.env.production
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

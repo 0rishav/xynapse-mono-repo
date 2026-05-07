@@ -1,4 +1,4 @@
-name: GCP OIDC Connection Test
+name: GCP OIDC Connection Test v2
 
 on:
   push:

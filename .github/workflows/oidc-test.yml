@@ -30,3 +30,11 @@ jobs:
       run: |
         gcloud auth list
         gcloud config list project
+
+    - name: 'Auth Check'
+      run: |
+        
+        gcloud projects list
+        
+        # Ya phir ye check kar
+        gcloud storage buckets list --limit=1

@@ -16,6 +16,11 @@ on:
     paths:
       - 'infrastructure/terraform/**'
 
+# Do-do pipeline ko rokne ke liye
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   id-token: write
@@ -25,7 +30,7 @@ jobs:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
     env:
-      TF_WORKING_DIR: ${{ github.ref == 'refs/heads/main' && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
+      TF_WORKING_DIR: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
 
     defaults:
       run:
@@ -49,11 +54,25 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
-            -backend-config="prefix=terraform/state/${{ github.ref_name }}"
+            -backend-config="prefix=terraform/state/${{ github.base_ref || github.ref_name }}"
+
+      - name: Get GitHub Runner Token
+        id: runner_token
+        run: |
+          TOKEN=$(curl -s -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/runners/registration-token | jq -r .token)
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -no-color -input=false
+        # YAHAN VARIABLES PASS KARNA ZAROORI HAI
+        run: |
+          terraform plan -no-color -input=false \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="job_id=${{ github.run_id }}" \
+            -var="repo_owner=${{ github.repository_owner }}" \
+            -var="repo_name=${{ github.event.repository.name }}" \
+            -var="github_token=${{ steps.runner_token.outputs.token }}"
 
   terraform-apply:
     name: "Terraform Apply"
@@ -61,14 +80,12 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     
-    # GITHUB ENVIRONMENT MAPPING
     environment: >-
       ${{ github.ref == 'refs/heads/main' && 'production' || 
           github.ref == 'refs/heads/release' && 'release' || 
           'staging' 
       }}
 
-    # DYNAMIC DIRECTORY AGAIN
     env:
       TF_WORKING_DIR: ${{ github.ref == 'refs/heads/main' && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
 

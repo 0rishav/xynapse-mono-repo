@@ -24,8 +24,13 @@ jobs:
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
+
+    environment: >-
+      ${{ github.ref == 'refs/heads/main' && 'production' || 
+          github.ref == 'refs/heads/release' && 'release' || 
+          'staging' 
+      }}
     
-    # DYNAMIC DIRECTORY: main -> prod folder, others -> dev folder
     env:
       TF_WORKING_DIR: ${{ github.ref == 'refs/heads/main' && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
 

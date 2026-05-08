@@ -16,7 +16,6 @@ on:
     paths:
       - 'infrastructure/terraform/**'
 
-# Do-do pipeline ko rokne ke liye
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -30,7 +29,10 @@ jobs:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
     env:
-      TF_WORKING_DIR: ${{ (github.ref == 'refs/heads/main' || github.base_ref == 'main') && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
+      TF_WORKING_DIR: >-
+        ${{ (contains(github.ref, 'main') || contains(github.ref, 'release') || contains(github.base_ref, 'main') || contains(github.base_ref, 'release')) 
+            && './infrastructure/terraform/environments/prod' 
+            || './infrastructure/terraform/environments/dev' }}
 
     defaults:
       run:
@@ -65,7 +67,6 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        # YAHAN VARIABLES PASS KARNA ZAROORI HAI
         run: |
           terraform plan -no-color -input=false \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
@@ -87,7 +88,10 @@ jobs:
       }}
 
     env:
-      TF_WORKING_DIR: ${{ github.ref == 'refs/heads/main' && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
+      TF_WORKING_DIR: >-
+        ${{ (contains(github.ref, 'main') || contains(github.ref, 'release')) 
+            && './infrastructure/terraform/environments/prod' 
+            || './infrastructure/terraform/environments/dev' }}
 
     defaults:
       run:

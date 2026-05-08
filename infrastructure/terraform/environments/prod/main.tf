@@ -38,7 +38,7 @@ module "gke" {
 # 4. Firewall Module
 
 module "security" {
-  source       = "../../modules/security"
+  source       = "../../modules/firewall"
   vpc_id       = module.vpc.vpc_id
   network_name = module.vpc.network_name
 }

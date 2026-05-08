@@ -35,7 +35,7 @@ module "gke" {
   machine_type  = "e2-standard-2"
 }
 
-# 4. Firewall Module
+# 4. Firewall Modulessss
 
 module "security" {
   source       = "../../modules/firewall"

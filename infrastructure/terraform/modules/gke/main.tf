@@ -1,10 +1,7 @@
-# 1. GKE Cluster (Control Plane)
 resource "google_container_cluster" "primary" {
   name     = var.cluster_name
   location = var.region
 
-  # We can't create a cluster without a node pool, 
-  # but we want to manage node pools separately.
   remove_default_node_pool = true
   initial_node_count       = 1
 
@@ -14,7 +11,7 @@ resource "google_container_cluster" "primary" {
   # Private Cluster Configuration
   private_cluster_config {
     enable_private_nodes    = true
-    enable_private_endpoint = false # Keep endpoint public for easy access
+    enable_private_endpoint = false 
     master_ipv4_cidr_block  = "172.16.0.0/28"
   }
 
@@ -25,7 +22,7 @@ resource "google_container_cluster" "primary" {
   }
 }
 
-# 2. Managed Node Pool (Application Workloads)
+# 2. Managed Node Pool 
 resource "google_container_node_pool" "primary_nodes" {
   name       = "${google_container_cluster.primary.name}-node-pool"
   location   = var.region
@@ -39,20 +36,23 @@ resource "google_container_node_pool" "primary_nodes" {
 
   autoscaling {
     min_node_count = 1
-    max_node_count = 3  # As per your request, 3 nodes max to save quota
+    max_node_count = 3 
   }
 
   node_config {
-    preemptible  = false # Stability for Production
+    preemptible  = false 
     machine_type = var.machine_type
 
+    disk_size_gb = 20                
+    disk_type    = "pd-standard"
+    
     tags = ["gke-node"]
 
     labels = {
       role = "general"
     }
 
-    # Crucial for security and future-proofing
+   
     metadata = {
       disable-legacy-endpoints = "true"
     }

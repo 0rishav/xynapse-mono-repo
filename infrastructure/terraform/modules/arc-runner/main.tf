@@ -6,8 +6,8 @@ resource "google_compute_instance" "ephemeral_runner" {
   boot_disk {
     initialize_params {
       image = "ubuntu-os-cloud/ubuntu-2204-lts" 
-      size  = 50 
-      type  = "pd-ssd" 
+      size  = 30            
+      type  = "pd-standard"
     }
   }
 

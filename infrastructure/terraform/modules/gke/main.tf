@@ -14,7 +14,7 @@ resource "google_container_cluster" "primary" {
   # Private Cluster Configuration
   private_cluster_config {
     enable_private_nodes    = true
-    enable_private_endpoint = false # Keep endpoint public for easier access from CI/CD
+    enable_private_endpoint = false # Keep endpoint public for easy access
     master_ipv4_cidr_block  = "172.16.0.0/28"
   }
 
@@ -39,11 +39,11 @@ resource "google_container_node_pool" "primary_nodes" {
 
   autoscaling {
     min_node_count = 1
-    max_node_count = 5
+    max_node_count = 3  # As per your request, 3 nodes max to save quota
   }
 
   node_config {
-    preemptible  = false # Main app nodes shouldn't be preemptible for stability
+    preemptible  = false # Stability for Production
     machine_type = var.machine_type
 
     tags = ["gke-node"]
@@ -52,7 +52,7 @@ resource "google_container_node_pool" "primary_nodes" {
       role = "general"
     }
 
-    # This is crucial for Migration/Future-proofing
+    # Crucial for security and future-proofing
     metadata = {
       disable-legacy-endpoints = "true"
     }

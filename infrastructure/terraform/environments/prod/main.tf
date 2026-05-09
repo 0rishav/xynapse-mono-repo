@@ -31,8 +31,8 @@ module "gke" {
   region        = var.region
   vpc_id        = module.vpc.vpc_id
   subnet_id     = module.vpc.private_subnet_id
-  gke_num_nodes = 3              
-  machine_type  = "e2-standard-4" 
+  gke_num_nodes = 2              
+  machine_type  = "e2-medium" 
 }
 
 # 4. Firewall Module

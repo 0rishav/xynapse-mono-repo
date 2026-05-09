@@ -32,7 +32,7 @@ module "gke" {
   vpc_id        = module.vpc.vpc_id
   subnet_id     = module.vpc.private_subnet_id
   gke_num_nodes = 1
-  machine_type  = "e2-standard-2"
+  machine_type  = "e2-medium"
 }
 
 # 4. Firewall Modulessss

@@ -9,8 +9,7 @@ on:
     paths:
       - 'infrastructure/terraform/**'
   pull_request:
-    branches: 
-      - stage
+    branches:
       - main
       - release
     paths:

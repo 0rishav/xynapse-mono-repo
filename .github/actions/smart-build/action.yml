@@ -6,6 +6,9 @@ inputs:
     required: true
   project_id:
     required: true
+  slack_webhook_url:
+    required: true
+    description: 'Slack Webhook URL for notifications'
 
 runs:
   using: "composite"
@@ -90,7 +93,7 @@ runs:
     - name: Notify Slack with Report Link
       shell: bash
       run: |
-        # Slack Webhook logic
+        # FIX 2: Yahan inputs use karo, secrets nahi
         curl -X POST -H 'Content-type: application/json' --data '{
           "text": "*Stage 1: Build & Security Report*",
           "attachments": [
@@ -110,4 +113,4 @@ runs:
               ]
             }
           ]
-        }' ${{ secrets.SLACK_WEBHOOK_URL }}
+        }' ${{ inputs.slack_webhook_url }}

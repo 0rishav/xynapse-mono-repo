@@ -73,3 +73,4 @@ jobs:
         with:
           service_name: ${{ matrix.service }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}

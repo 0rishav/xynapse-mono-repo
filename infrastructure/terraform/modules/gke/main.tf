@@ -16,7 +16,7 @@ resource "google_container_cluster" "primary" {
     master_ipv4_cidr_block  = "172.16.0.0/28"
   }
 
-  # Enabling Alias IPs (Mapping to the VPC secondary ranges)
+  # Enabling Alias IPs 
   ip_allocation_policy {
     cluster_secondary_range_name  = "gke-pods"
     services_secondary_range_name = "gke-services"
@@ -46,7 +46,7 @@ resource "google_container_node_pool" "primary_nodes" {
 
     disk_size_gb = 20               
     disk_type    = "pd-standard"
-    
+
     tags = ["gke-node"]
 
     labels = {

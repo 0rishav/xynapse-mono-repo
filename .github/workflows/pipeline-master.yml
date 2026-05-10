@@ -1,0 +1,75 @@
+name: "Stage 1: Build & Integrity"
+
+on:
+  pull_request:
+    branches: [main, release, stage]
+    paths:
+      - 'apps/**'
+      - 'packages/common/**'
+  
+  push:
+    branches: [main, release, stage]
+    paths:
+      - 'apps/**'
+      - 'packages/common/**'
+
+jobs:
+  # Decision Maker 
+  detect-changes:
+    runs-on: [self-hosted] 
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            identity: ['apps/identity-service/**', 'packages/common/**']
+            course: ['apps/course-service/**', 'packages/common/**']
+            mcq: ['apps/mcq-service/**', 'packages/common/**']
+            gateway: ['apps/gateway-service/**', 'packages/common/**']
+
+  # High-Performance Build
+  build:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.services != '[]' }}
+    
+    runs-on: >-
+      ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release' || 
+           github.base_ref == 'main' || github.base_ref == 'release') 
+           && 'arc-runner-prod-fresh' || 'arc-runner-dev-fresh' }}
+    
+    environment: >-
+      ${{ github.ref == 'refs/heads/main' && 'production' || 
+          github.ref == 'refs/heads/release' && 'release' || 
+          'staging' }}
+
+    strategy:
+      fail-fast: false 
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    
+    permissions:
+      contents: read
+      id-token: write 
+      security-events: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Google OIDC Auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Docker Login (GCR)
+        run: gcloud auth configure-docker --quiet
+
+      - name: Execute Smart Build
+        uses: ./.github/actions/smart-build
+        with:
+          service_name: ${{ matrix.service }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}

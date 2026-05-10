@@ -1,4 +1,3 @@
-
 resource "google_container_cluster" "primary" {
   name     = var.cluster_name
   location = var.region
@@ -23,7 +22,7 @@ resource "google_container_cluster" "primary" {
   }
 }
 
-# 2. Managed Node Pool (Application Workloads)
+# 2. Managed Node Pool 
 resource "google_container_node_pool" "primary_nodes" {
   name       = "${google_container_cluster.primary.name}-node-pool"
   location   = var.region
@@ -37,14 +36,14 @@ resource "google_container_node_pool" "primary_nodes" {
 
   autoscaling {
     min_node_count = 1
-    max_node_count = 3  
+    max_node_count = 3 
   }
 
   node_config {
     preemptible  = false 
     machine_type = var.machine_type
 
-    disk_size_gb = 20               
+    disk_size_gb = 20                
     disk_type    = "pd-standard"
 
     tags = ["gke-node"]
@@ -53,7 +52,7 @@ resource "google_container_node_pool" "primary_nodes" {
       role = "general"
     }
 
-    # Crucial for security and future-proofing
+   
     metadata = {
       disable-legacy-endpoints = "true"
     }

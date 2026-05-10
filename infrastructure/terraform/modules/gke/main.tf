@@ -45,7 +45,6 @@ resource "google_container_node_pool" "primary_nodes" {
 
     disk_size_gb = 20                
     disk_type    = "pd-standard"
-
     tags = ["gke-node"]
 
     labels = {

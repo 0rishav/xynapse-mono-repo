@@ -57,10 +57,10 @@ runs:
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ github.sha }}'
-        format: 'template'
-        template: '@/contrib/html.tpl'
+        format: 'html' 
         output: 'report-${{ inputs.service_name }}.html'
         severity: 'CRITICAL,HIGH'
+      
 
     # GENERATE GITHUB STEP SUMMARY
     - name: Generate Build Summary

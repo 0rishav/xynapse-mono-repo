@@ -81,7 +81,7 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: security-report-${{ inputs.service_name }}
-        path: report-${{ inputs.service_name }}.html
+        path: report-${{ inputs.service_name }}.json 
         retention-days: 7
 
     # 9. NOTIFY SLACK

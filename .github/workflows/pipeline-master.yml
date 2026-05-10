@@ -36,8 +36,7 @@ jobs:
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
     
     runs-on: >-
-      ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release' || 
-           github.base_ref == 'main' || github.base_ref == 'release') 
+      ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') 
            && 'arc-runner-prod-fresh' || 'arc-runner-dev-fresh' }}
     
     environment: >-
@@ -73,3 +72,4 @@ jobs:
         with:
           service_name: ${{ matrix.service }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}

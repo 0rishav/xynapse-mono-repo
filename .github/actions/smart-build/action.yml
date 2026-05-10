@@ -31,14 +31,15 @@ runs:
         IMAGE="gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}"
         TAG="${{ github.sha }}"
         
+        # Fixed: Context flag hata kar path end mein daal diya hai
         docker buildx build \
-          --context ./apps/${{ inputs.service_name }}-service \
           --push \
           -t ${IMAGE}:${TAG} \
           -t ${IMAGE}:latest \
           --cache-from type=registry,ref=${IMAGE}:cache \
           --cache-to type=registry,ref=${IMAGE}:cache,mode=max \
-          --build-arg BUILDKIT_INLINE_CACHE=1
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          ./apps/${{ inputs.service_name }}-service
 
     #  SIGN THE ARTIFACT (Cosign)
     - name: Install Cosign

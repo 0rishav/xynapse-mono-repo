@@ -20,11 +20,11 @@ runs:
         chmod +x .github/scripts/docker-audit.sh
         ./.github/scripts/docker-audit.sh apps/${{ inputs.service_name }}-service/Dockerfile
 
-    # SETUP BUILDX for Remote Caching
+    # SETUP BUILDX
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # BUILD & PUSH WITH INLINE GCR CACHE
+    # BUILD & PUSH 
     - name: Build and Push
       shell: bash
       run: |
@@ -41,26 +41,29 @@ runs:
           -f ./apps/${{ inputs.service_name }}-service/Dockerfile \
           .
 
-    #  SIGN THE ARTIFACT (Cosign)
+    # INSTALL COSIGN
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3.5.0
 
+    # SIGN IMAGE
     - name: Sign Image
       shell: bash
       run: |
         IMAGE_REF="gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ github.sha }}"
         cosign sign --yes ${IMAGE_REF}
 
-    # TRIVY SCAN 
+    # TRIVY SCAN & HTML REPORT GENERATION
     - name: Trivy Security Scan
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ github.sha }}'
-        format: 'table'
+        format: 'template'
+        template: '@/contrib/html.tpl'
+        output: 'report-${{ inputs.service_name }}.html'
         severity: 'CRITICAL,HIGH'
 
-    # GENERATE STAGE 1 REPORT 
-    - name: Generate Build & Security Summary
+    # GENERATE GITHUB STEP SUMMARY
+    - name: Generate Build Summary
       shell: bash
       if: always()
       run: |
@@ -69,21 +72,11 @@ runs:
         echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
         echo "| **Custom Audit** | Passed | Dockerfile Security Guard |" >> $GITHUB_STEP_SUMMARY
         echo "| **Docker Build** | Success | Image: ${{ inputs.service_name }}:${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Cache Push** | Updated | GCR Inline Cache |" >> $GITHUB_STEP_SUMMARY
         echo "| **Image Sign** | Signed | Cosign OIDC Signature |" >> $GITHUB_STEP_SUMMARY
-        
-        # Trivy ka results summary nikalne ke liye
         echo "### 🔍 Vulnerability Scan Results" >> $GITHUB_STEP_SUMMARY
-        echo "Check the 'Trivy Security Scan' step for full table." >> $GITHUB_STEP_SUMMARY
+        echo "HTML Report generated and attached as artifact." >> $GITHUB_STEP_SUMMARY
 
-    - name: Generate HTML Security Report
-      shell: bash
-      run: |
-        # Trivy HTML report generate kar raha hai
-        trivy image --format template --template "@/contrib/html.tpl" \
-          -o report-${{ inputs.service_name }}.html \
-          gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ github.sha }}
-    
+    # ARCHIVE REPORT
     - name: Archive Security Report
       uses: actions/upload-artifact@v4
       with:
@@ -91,10 +84,10 @@ runs:
         path: report-${{ inputs.service_name }}.html
         retention-days: 7
 
-    - name: Notify Slack with Report Link
+    # 9. NOTIFY SLACK
+    - name: Notify Slack
       shell: bash
       run: |
-        # FIX 2: Yahan inputs use karo, secrets nahi
         curl -X POST -H 'Content-type: application/json' --data '{
           "text": "*Stage 1: Build & Security Report*",
           "attachments": [
@@ -102,8 +95,7 @@ runs:
               "color": "#36a64f",
               "fields": [
                 { "title": "Service", "value": "${{ inputs.service_name }}", "short": true },
-                { "title": "Status", "value": "SUCCESS", "short": true },
-                { "title": "Vulnerabilities", "value": "Check HTML Report in Actions Tab", "short": false }
+                { "title": "Status", "value": "SUCCESS", "short": true }
               ],
               "actions": [
                 {

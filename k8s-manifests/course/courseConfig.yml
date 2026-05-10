@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: course-vault-config
+  namespace: xynapse-stage
+data:
+  vault-agent-config.hcl: |
+    exit_after_auth = false
+    pid_file = "/home/vault/pid"
+
+    auto_auth {
+      method "kubernetes" {
+        mount_path = "auth/kubernetes"
+        config = {
+          role = "course-role"
+        }
+      }
+    }
+
+    sink "file" {
+      config = {
+        path = "/home/vault/.token"
+      }
+    }

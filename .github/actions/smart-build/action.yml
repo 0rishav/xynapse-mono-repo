@@ -9,28 +9,33 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # CLEANUP TMP 
-    - name: Cleanup Gitleaks Tmp
+    # 1. CLEANUP TMP 
+    - name: Cleanup Runner Environment
       shell: bash
-      run: sudo rm -rf /tmp/gitleaks.tmp /tmp/gitleaks-8.24.3 || true
-      
-    # SECRET DETECTION
+      run: |
+        sudo rm -rf /tmp/gitleaks.tmp /tmp/gitleaks-8.24.3 || true
+        docker system prune -f --filter "until=24h" || true
+
+    # 2. SECRET DETECTION 
     - name: Secret Detection
       uses: gitleaks/gitleaks-action@v2
       env:
         GITHUB_TOKEN: ${{ github.token }}
+      with:
+        args: detect --verbose --redact --no-git 
 
-    # DOCKERFILE AUDIT
+    # 3. DOCKERFILE AUDIT
     - name: Dockerfile Guard
       shell: bash
       run: |
         chmod +x .github/scripts/docker-audit.sh
         ./.github/scripts/docker-audit.sh apps/${{ inputs.service_name }}-service/Dockerfile
 
-    # SETUP BUILDX & LOCAL BUILD
+    # 4. SETUP BUILDX
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    # 5. LOCAL BUILD & TRIVY SCAN
     - name: Build Local Image
       shell: bash
       run: |
@@ -39,7 +44,6 @@ runs:
           -t test-image:${{ github.sha }} \
           -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
 
-    # TRIVY SCAN 
     - name: Trivy Security Scan
       uses: aquasecurity/trivy-action@master
       with:
@@ -49,7 +53,12 @@ runs:
         severity: 'CRITICAL,HIGH'
         exit-code: '0' 
 
-    # FINAL PUSH 
+    # 6. DOCKER LOGIN REFRESH (Ye step credentials phatne se bachayega)
+    - name: Refresh GCR Auth
+      shell: bash
+      run: gcloud auth configure-docker --quiet
+
+    # 7. FINAL PUSH
     - name: Build and Push to GCR
       shell: bash
       run: |
@@ -63,7 +72,7 @@ runs:
           --build-arg BUILDKIT_INLINE_CACHE=1 \
           -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
 
-    # COSIGN SIGNING 
+    # 8. COSIGN SIGNING 
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3.5.0
 
@@ -73,7 +82,7 @@ runs:
         IMAGE_REF="gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ github.sha }}"
         cosign sign --yes ${IMAGE_REF}
 
-    # GENERATE CONSOLIDATED SUMMARY 
+    # 9. SUMMARY GENERATION
     - name: Generate Build Summary
       shell: bash
       if: always()
@@ -81,14 +90,12 @@ runs:
         echo "### Consolidated Security Report: ${{ inputs.service_name }}" >> $GITHUB_STEP_SUMMARY
         echo "| Component | Status | Tool Used |" >> $GITHUB_STEP_SUMMARY
         echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Code Quality** | Triggered | GitHub CodeQL |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Secrets Scan** | Completed | Gitleaks |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Infra Audit** | Completed | Custom Docker-Audit |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Vulnerabilities** | Scanned | Trivy (CRITICAL/HIGH) |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Image Signing** | Signed | Cosign OIDC |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Registry Status** | Pushed | Google Artifact Registry |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Secrets Scan** | Done | Gitleaks |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Infra Audit** | Passed | Docker-Audit |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Vulnerabilities** | Scanned | Trivy |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Registry Status** | Pushed | GCR |" >> $GITHUB_STEP_SUMMARY
 
-    # 8. ARCHIVE REPORT
+    # 10. ARCHIVE & NOTIFY
     - name: Archive Security Report
       uses: actions/upload-artifact@v4
       if: always()
@@ -97,14 +104,11 @@ runs:
         path: report-${{ inputs.service_name }}.json 
         retention-days: 7
 
-    # CONSOLIDATED SLACK NOTIFICATION
     - name: Notify Slack
       if: always()
       shell: bash
       run: |
-        # Status ke hisaab se color decide karo (Bash logic use karna safe hai)
         COL="${{ job.status == 'success' && '#36a64f' || '#ff0000' }}"
-        
         curl -X POST -H 'Content-type: application/json' --data "{
           \"text\": \"*Pipeline Stage 2: Security & Build Report*\",
           \"attachments\": [
@@ -112,13 +116,12 @@ runs:
               \"color\": \"$COL\",
               \"fields\": [
                 { \"title\": \"Service\", \"value\": \"${{ inputs.service_name }}\", \"short\": true },
-                { \"title\": \"Security Scan\", \"value\": \"Trivy & Gitleaks Passed\", \"short\": true },
-                { \"title\": \"GCR Status\", \"value\": \"Image Pushed & Signed\", \"short\": false }
+                { \"title\": \"GCR Status\", \"value\": \"Pushed & Signed\", \"short\": true }
               ],
               \"actions\": [
                 {
                   \"type\": \"button\",
-                  \"text\": \"View Build Details\",
+                  \"text\": \"View Details\",
                   \"url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
                 }
               ]

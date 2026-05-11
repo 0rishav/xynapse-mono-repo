@@ -21,6 +21,9 @@ jobs:
       services: ${{ steps.filter.outputs.changes }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -42,6 +45,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -78,6 +83,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
 
       - name: Google OIDC Auth
         uses: 'google-github-actions/auth@v2'

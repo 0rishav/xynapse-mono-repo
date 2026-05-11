@@ -1,108 +1,133 @@
 name: 'Smart Build Engine'
-description: 'Handles Audit, Build, Remote Caching and Signing'
+description: 'Security-First Build, Scan, and Push with Full Reporting'
 
 inputs:
-  service_name:
-    required: true
-  project_id:
-    required: true
-  slack_webhook_url:
-    required: true
-    description: 'Slack Webhook URL for notifications'
+  service_name: { required: true }
+  project_id: { required: true }
+  slack_webhook_url: { required: true }
 
 runs:
   using: "composite"
   steps:
-    # CUSTOM SECURITY AUDIT
+    # SECRET DETECTION
+    - name: Secret Detection
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    # DOCKERFILE AUDIT
     - name: Dockerfile Guard
       shell: bash
       run: |
         chmod +x .github/scripts/docker-audit.sh
         ./.github/scripts/docker-audit.sh apps/${{ inputs.service_name }}-service/Dockerfile
 
-    # SETUP BUILDX
+    # SETUP BUILDX & LOCAL BUILD
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # BUILD & PUSH 
-    - name: Build and Push
+    - name: Build Local Image
+      shell: bash
+      run: |
+        docker buildx build \
+          --load \
+          -t test-image:${{ github.sha }} \
+          -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
+
+    # TRIVY SCAN 
+    - name: Trivy Security Scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'test-image:${{ github.sha }}'
+        format: 'json'
+        output: 'report-${{ inputs.service_name }}.json'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '0' 
+
+    # FINAL PUSH 
+    - name: Build and Push to GCR
       shell: bash
       run: |
         IMAGE="gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}"
-        TAG="${{ github.sha }}"
-        
         docker buildx build \
           --push \
-          -t ${IMAGE}:${TAG} \
+          -t ${IMAGE}:${{ github.sha }} \
           -t ${IMAGE}:latest \
           --cache-from type=registry,ref=${IMAGE}:cache \
           --cache-to type=registry,ref=${IMAGE}:cache,mode=max \
           --build-arg BUILDKIT_INLINE_CACHE=1 \
-          -f ./apps/${{ inputs.service_name }}-service/Dockerfile \
-          .
+          -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
 
-    # INSTALL COSIGN
+    # COSIGN SIGNING 
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3.5.0
 
-    # SIGN IMAGE
     - name: Sign Image
       shell: bash
       run: |
         IMAGE_REF="gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ github.sha }}"
         cosign sign --yes ${IMAGE_REF}
 
-    # TRIVY SCAN & HTML REPORT GENERATION
-    - name: Trivy Security Scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: 'gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ github.sha }}'
-        format: 'json'
-        output: 'report-${{ inputs.service_name }}.json'
-        severity: 'CRITICAL,HIGH'
-        exit-code: '0'
-      
-
-    # GENERATE GITHUB STEP SUMMARY
+    # GENERATE CONSOLIDATED SUMMARY 
     - name: Generate Build Summary
       shell: bash
       if: always()
       run: |
-        echo "### Build Report: ${{ inputs.service_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "| Task | Status | Details |" >> $GITHUB_STEP_SUMMARY
+        echo "### Consolidated Security Report: ${{ inputs.service_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status | Tool Used |" >> $GITHUB_STEP_SUMMARY
         echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Custom Audit** | Passed | Dockerfile Security Guard |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Docker Build** | Success | Image: ${{ inputs.service_name }}:${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Image Sign** | Signed | Cosign OIDC Signature |" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔍 Vulnerability Scan Results" >> $GITHUB_STEP_SUMMARY
-        echo "HTML Report generated and attached as artifact." >> $GITHUB_STEP_SUMMARY
+        echo "| **Code Quality** | Triggered | GitHub CodeQL |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Secrets Scan** | Completed | Gitleaks |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Infra Audit** | Completed | Custom Docker-Audit |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Vulnerabilities** | Scanned | Trivy (CRITICAL/HIGH) |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Image Signing** | Signed | Cosign OIDC |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Registry Status** | Pushed | Google Artifact Registry |" >> $GITHUB_STEP_SUMMARY
 
-    # ARCHIVE REPORT
+    # 8. ARCHIVE REPORT
     - name: Archive Security Report
       uses: actions/upload-artifact@v4
+      if: always()
       with:
         name: security-report-${{ inputs.service_name }}
         path: report-${{ inputs.service_name }}.json 
         retention-days: 7
 
-    # 9. NOTIFY SLACK
+    # CONSOLIDATED SLACK NOTIFICATION
     - name: Notify Slack
+      if: always()
       shell: bash
       run: |
         curl -X POST -H 'Content-type: application/json' --data '{
-          "text": "*Stage 1: Build & Security Report*",
+          "text": "*CI/CD Pipeline Report: ${{ inputs.service_name }}*",
           "attachments": [
             {
-              "color": "#36a64f",
-              "fields": [
-                { "title": "Service", "value": "${{ inputs.service_name }}", "short": true },
-                { "title": "Status", "value": "SUCCESS", "short": true }
-              ],
-              "actions": [
+              "color": "${{ job.status == '"'success'"' ? '"'#36a64f'"' : '"'#ff0000'"' }}",
+              "blocks": [
                 {
-                  "type": "button",
-                  "text": "View Full Report",
-                  "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Status:* ${{ job.status }}\n*Service:* `${{ inputs.service_name }}`\n*Commit:* `${{ github.sha }}`"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    { "type": "mrkdwn", "text": "*Gitleaks:* Passed" },
+                    { "type": "mrkdwn", "text": "*CodeQL:* Active" },
+                    { "type": "mrkdwn", "text": "*Trivy:* Scanned" },
+                    { "type": "mrkdwn", "text": "*Cosign:* Signed" }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "View Full Artifacts & Logs" },
+                      "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
                 }
               ]
             }

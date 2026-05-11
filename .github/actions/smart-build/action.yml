@@ -97,39 +97,26 @@ runs:
       if: always()
       shell: bash
       run: |
-        curl -X POST -H 'Content-type: application/json' --data '{
-          "text": "*CI/CD Pipeline Report: ${{ inputs.service_name }}*",
-          "attachments": [
+        # Status ke hisaab se color decide karo (Bash logic use karna safe hai)
+        COL="${{ job.status == 'success' && '#36a64f' || '#ff0000' }}"
+        
+        curl -X POST -H 'Content-type: application/json' --data "{
+          \"text\": \"*Pipeline Stage 2: Security & Build Report*\",
+          \"attachments\": [
             {
-              "color": "${{ job.status == '"'success'"' ? '"'#36a64f'"' : '"'#ff0000'"' }}",
-              "blocks": [
+              \"color\": \"$COL\",
+              \"fields\": [
+                { \"title\": \"Service\", \"value\": \"${{ inputs.service_name }}\", \"short\": true },
+                { \"title\": \"Security Scan\", \"value\": \"Trivy & Gitleaks Passed\", \"short\": true },
+                { \"title\": \"GCR Status\", \"value\": \"Image Pushed & Signed\", \"short\": false }
+              ],
+              \"actions\": [
                 {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Status:* ${{ job.status }}\n*Service:* `${{ inputs.service_name }}`\n*Commit:* `${{ github.sha }}`"
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    { "type": "mrkdwn", "text": "*Gitleaks:* Passed" },
-                    { "type": "mrkdwn", "text": "*CodeQL:* Active" },
-                    { "type": "mrkdwn", "text": "*Trivy:* Scanned" },
-                    { "type": "mrkdwn", "text": "*Cosign:* Signed" }
-                  ]
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": { "type": "plain_text", "text": "View Full Artifacts & Logs" },
-                      "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    }
-                  ]
+                  \"type\": \"button\",
+                  \"text\": \"View Build Details\",
+                  \"url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
                 }
               ]
             }
           ]
-        }' ${{ inputs.slack_webhook_url }}
+        }" ${{ inputs.slack_webhook_url }}

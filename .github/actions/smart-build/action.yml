@@ -9,6 +9,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # CLEANUP TMP 
+    - name: Cleanup Gitleaks Tmp
+      shell: bash
+      run: sudo rm -rf /tmp/gitleaks.tmp /tmp/gitleaks-8.24.3 || true
+      
     # SECRET DETECTION
     - name: Secret Detection
       uses: gitleaks/gitleaks-action@v2

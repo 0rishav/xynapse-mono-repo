@@ -89,11 +89,13 @@ jobs:
       - name: Google OIDC Auth
         uses: 'google-github-actions/auth@v2'
         with:
+          token_format: 'access_token'     
+          create_credentials_file: true    
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
       - name: Docker Login (GCR)
-        run: gcloud auth configure-docker --quiet
+        run: gcloud auth configure-docker gcr.io --quiet 
 
       - name: Execute Smart Build
         uses: ./.github/actions/smart-build

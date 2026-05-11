@@ -19,6 +19,10 @@ const allowedExtensions = new Set([
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; 
 
+console.log(MAX_FILE_SIZE)
+console.log(MAX_FILE_SIZE)
+
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOAD_DIR);

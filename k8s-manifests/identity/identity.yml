@@ -1,20 +1,29 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1 
+kind: Rollout                
 metadata:
   name: identity-service
   namespace: xynapse-stage
 spec:
-  replicas: 1
+  replicas: 2                 
   selector:
     matchLabels:
       app: identity
+  strategy:
+    canary:
+      steps:
+        - setWeight: 25      
+        - pause: {duration: 2m} 
+        - setWeight: 50      
+        - pause: {duration: 1m}
+        - setWeight: 100     
+  # --- CANARY STRATEGY ---
   template:
     metadata:
       labels:
         app: identity
       annotations:
         vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: "identity-role"
+        vault.hashicorp.com/role: "xynapse-role"
         vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/identity"
         vault.hashicorp.com/agent-inject-template-config: |
           {{- with secret "secret/data/xynapse/identity" -}}
@@ -23,7 +32,7 @@ spec:
     spec:
       containers:
       - name: identity
-        image: gcr.io/${PROJECT_ID}/identity-service:latest 
+        image: gcr.io/${PROJECT_ID}/identity-service:latest
         ports:
         - containerPort: 8080
 ---
@@ -31,6 +40,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: identity-service
+  namespace: xynapse-stage
 spec:
   selector:
     app: identity

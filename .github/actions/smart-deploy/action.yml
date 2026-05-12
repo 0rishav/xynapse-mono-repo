@@ -21,6 +21,7 @@ runs:
         FILE_PATH="k8s-manifests/${{ inputs.service_name }}/${{ inputs.service_name }}.yml"
         echo "Updating $FILE_PATH to version ${{ inputs.new_version }}"
         
+        # Sed command updated for maximum flexibility
         sed -i "s|image: gcr.io/.*|image: gcr.io/${{ env.PROJECT_ID }}/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
 
     - name: Commit and Push to Repository
@@ -36,6 +37,13 @@ runs:
         else
           git commit -m "chore(gitops): update ${{ inputs.service_name }} to ${{ inputs.new_version }} [skip ci]"
           
-          TARGET_BRANCH="master" # Ya 'main'
+          TARGET_BRANCH="master"
+          
+          # IMPORTANT: Pehle fetch aur rebase karo taaki remote changes local mein aa jayein
+          # Isse "rejected (fetch first)" wala error khatam ho jayega
+          git fetch origin $TARGET_BRANCH
+          git pull --rebase origin $TARGET_BRANCH
+          
+          # Ab push maaro
           git push https://x-access-token:${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:$TARGET_BRANCH
         fi

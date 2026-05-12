@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
       - name: mcq
-        image: gcr.io/${PROJECT_ID}/mcq-service:latest
+        image: gcr.io//mcq:v1.0.1
         ports:
         - containerPort: 8082
 ---

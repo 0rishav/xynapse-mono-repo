@@ -4,7 +4,7 @@ metadata:
   name: mcq-service
   namespace: xynapse-stage
 spec:
-  replicas: 2                   
+  replicas: 1                   
   selector:
     matchLabels:
       app: mcq
@@ -27,7 +27,7 @@ spec:
         vault.hashicorp.com/agent-inject-template-config: |
           {{- with secret "secret/data/xynapse/global" -}}
           {{- range $key, $value := .Data.data }}
-          export {{ $key }}="{{ $value }}"
+          export {{ $key }}='{{ $value }}'
           {{- end }}
           {{- end -}}
     spec:
@@ -37,22 +37,24 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # Vault file render hone ka wait karo
-            while [ ! -f /vault/secrets/config ]; do echo "Waiting for MCQ secrets..."; sleep 1; done;
+            # 1. Wait until Vault file is present AND has data
+            while [ ! -s /vault/secrets/config ]; do echo "Waiting for MCQ secrets..."; sleep 2; done;
             
-            # Environment variables load karo
-            source /vault/secrets/config
+            # 2. Force load variables into the shell environment
+            set -a
+            . /vault/secrets/config
+            set +a
             
-            # Application start karo
-            node apps/mcq-service/src/index.js
+            # 3. Path Fix: Double path logic ko bypass karne ke liye src/index.js priority
+            node src/index.js || node apps/mcq-service/src/index.js
         ports:
         - containerPort: 8082
         resources:
           requests:
-            memory: "128Mi"
+            memory: "256Mi"
             cpu: "100m"
           limits:
-            memory: "256Mi"
+            memory: "512Mi" 
             cpu: "250m"
 
 ---
@@ -68,4 +70,4 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8082
+    targetPort: 8003

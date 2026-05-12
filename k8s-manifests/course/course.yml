@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1 
-kind: Rollout              
+kind: Rollout               
 metadata:
   name: course-service
   namespace: xynapse-stage
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: course
@@ -27,7 +27,7 @@ spec:
         vault.hashicorp.com/agent-inject-template-config: |
           {{- with secret "secret/data/xynapse/global" -}}
           {{- range $key, $value := .Data.data }}
-          export {{ $key }}="{{ $value }}"
+          export {{ $key }}='{{ $value }}'
           {{- end }}
           {{- end -}}
     spec:
@@ -37,14 +37,17 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # 1. Jab tak Vault file render na kar de, wait karo (Race Condition Fix)
-            while [ ! -f /vault/secrets/config ]; do echo "Waiting for secrets..."; sleep 1; done;
+            # 1. Wait for vault file with content
+            while [ ! -s /vault/secrets/config ]; do echo "Waiting for secrets..."; sleep 2; done;
             
-            # 2. File ko source karo taaki 'export' commands execute ho jayein
-            source /vault/secrets/config
+            # 2. Source the variables with export enforcement
+            set -a
+            . /vault/secrets/config
+            set +a
             
-            # 3. Ab apni application start karo
-            node apps/course-service/src/index.js 
+            # 3. Path Fix: Agar Dockerfile WORKDIR set hai toh seedha src/index.js chalega
+            # Agar fir bhi phate toh yahan full path daal dena: node /app/apps/course-service/src/index.js
+            node src/index.js 
         ports:
         - containerPort: 8002
         resources:
@@ -52,7 +55,7 @@ spec:
             memory: "128Mi"
             cpu: "100m"
           limits:
-            memory: "256Mi"
+            memory: "512Mi"  
             cpu: "200m"
 
 ---

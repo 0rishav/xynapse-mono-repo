@@ -1,70 +1,74 @@
 apiVersion: argoproj.io/v1alpha1 
 kind: Rollout                 
 metadata:
-  name: gateway-service
+  name: identity-service
   namespace: xynapse-stage
 spec:
-  replicas: 2                   
+  replicas: 1                   
   selector:
     matchLabels:
-      app: gateway
+      app: identity
   strategy:
     canary:
       steps:
-        - setWeight: 10       
+        - setWeight: 25      
         - pause: {duration: 2m} 
-        - setWeight: 40       
+        - setWeight: 50      
         - pause: {duration: 1m}
         - setWeight: 100     
   template:
     metadata:
       labels:
-        app: gateway
+        app: identity
       annotations:
-        # --- VAULT CONFIG ---
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "xynapse-role"
         vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/global"
         vault.hashicorp.com/agent-inject-template-config: |
           {{- with secret "secret/data/xynapse/global" -}}
           {{- range $key, $value := .Data.data }}
-          export {{ $key }}="{{ $value }}"
+          export {{ $key }}='{{ $value }}'
           {{- end }}
           {{- end -}}
     spec:
       containers:
-      - name: gateway
-        image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/gateway:v1.0.1
+      - name: identity
+        image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/identity:v1.0.1
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # 1. Wait for vault file to exist
-            while [ ! -f /vault/secrets/config ]; do echo "Waiting for gateway secrets..."; sleep 1; done;
-            # 2. Source the secrets as real environment variables
-            source /vault/secrets/config
-            # 3. Start the gateway service
-            node apps/gateway-service/src/index.js
+            # 1. Wait for vault file AND content (-s flag ensures it's not empty)
+            while [ ! -s /vault/secrets/config ]; do echo "Waiting for identity secrets..."; sleep 2; done;
+            
+            # 2. Source variables with export enforcement
+            set -a
+            . /vault/secrets/config
+            set +a
+            
+            # 3. Path Fix: Agar WORKDIR apps/identity-service hai toh src/index.js chalega.
+            # Fallback ke liye || use kiya hai taaki dono mein se jo sahi ho wo chal jaye.
+            node src/index.js || node apps/identity-service/src/index.js
         ports:
-        - containerPort: 8000
+        - containerPort: 8001
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "256Mi" 
+            cpu: "100m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "512Mi" 
+            cpu: "300m"
 
 ---
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: gateway-service
+  name: identity-service
   namespace: xynapse-stage
 spec:
   selector:
-    app: gateway
+    app: identity
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8000
+    targetPort: 8001

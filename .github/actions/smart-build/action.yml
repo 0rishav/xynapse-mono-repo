@@ -5,6 +5,7 @@ inputs:
   service_name: { required: true }
   project_id: { required: true }
   slack_webhook_url: { required: true }
+  image_tag: { required: true }
 
 runs:
   using: "composite"
@@ -55,20 +56,16 @@ runs:
         severity: 'CRITICAL,HIGH'
         exit-code: '0' 
 
-    # DOCKER LOGIN REFRESH 
+    # DOCKER LOGIN  
     - name: Ensure Artifact Registry Repo & Auth
       shell: bash
       run: |
         if ! gcloud artifacts repositories describe xynapse-mono-repo --location=us-central1 --project=${{ inputs.project_id }} >/dev/null 2>&1; then
-          echo "Creating xynapse-mono-repo..."
-          gcloud artifacts repositories create xynapse-mono-repo \
-            --repository-format=docker \
-            --location=us-central1 \
-            --project=${{ inputs.project_id }}
+          gcloud artifacts repositories create xynapse-mono-repo --repository-format=docker --location=us-central1 --project=${{ inputs.project_id }}
         fi
         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-    # FINAL PUSH
+    # FINAL PUSH 
     - name: Build and Push to Artifact Registry
       shell: bash
       run: |
@@ -76,6 +73,7 @@ runs:
         docker buildx build \
           --push \
           -t ${IMAGE}:${{ github.sha }} \
+          -t ${IMAGE}:${{ inputs.image_tag }} \
           -t ${IMAGE}:latest \
           --cache-from type=registry,ref=${IMAGE}:cache \
           --cache-to type=registry,ref=${IMAGE}:cache,mode=max \
@@ -89,7 +87,7 @@ runs:
     - name: Sign Image
       shell: bash
       run: |
-        IMAGE_REF="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ github.sha }}"
+        IMAGE_REF="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.image_tag }}"
         cosign sign --yes ${IMAGE_REF}
 
     # SUMMARY GENERATION

@@ -82,7 +82,7 @@ jobs:
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
       - name: Docker Login (GCR)
-        run: gcloud auth configure-docker gcr.io --quiet 
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet 
 
       - name: Generate Semantic Version
         id: semver

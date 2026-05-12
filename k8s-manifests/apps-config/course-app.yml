@@ -1,3 +1,4 @@
+# course-app.yml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -7,12 +8,14 @@ spec:
   project: default
   source:
     repoURL: https://github.com/0rishav/xynapse-mono-repo.git 
-    targetRevision: HEAD
+    targetRevision: stage   
     path: k8s-manifests/course 
   destination:
     server: https://kubernetes.default.svc
-    namespace: production
+    namespace: xynapse-stage 
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -7,12 +7,14 @@ spec:
   project: default
   source:
     repoURL: https://github.com/0rishav/xynapse-mono-repo.git 
-    targetRevision: HEAD
+    targetRevision: stage   
     path: k8s-manifests/identity 
   destination:
     server: https://kubernetes.default.svc
-    namespace: production
+    namespace: xynapse-stage 
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true  

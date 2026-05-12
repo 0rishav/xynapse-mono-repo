@@ -34,9 +34,19 @@ spec:
       containers:
       - name: course
         image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/course:v1.0.1
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # 1. Jab tak Vault file render na kar de, wait karo (Race Condition Fix)
+            while [ ! -f /vault/secrets/config ]; do echo "Waiting for secrets..."; sleep 1; done;
+            
+            # 2. File ko source karo taaki 'export' commands execute ho jayein
+            source /vault/secrets/config
+            
+            # 3. Ab apni application start karo
+            node apps/course-service/src/index.js 
         ports:
-        - containerPort: 8081
-        # --- RESOURCE HANDLING ADDED HERE ---
+        - containerPort: 8002
         resources:
           requests:
             memory: "128Mi"
@@ -58,4 +68,4 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8081
+    targetPort: 8002

@@ -1,14 +1,13 @@
 apiVersion: argoproj.io/v1alpha1 
-kind: Rollout                
+kind: Rollout                 
 metadata:
   name: mcq-service
   namespace: xynapse-stage
 spec:
-  replicas: 2                  
+  replicas: 2                   
   selector:
     matchLabels:
       app: mcq
-  # --- CANARY STRATEGY ---
   strategy:
     canary:
       steps:
@@ -24,7 +23,6 @@ spec:
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "xynapse-role"
-        # Path badal kar 'global' kar diya hai
         vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/global"
         vault.hashicorp.com/agent-inject-template-config: |
           {{- with secret "secret/data/xynapse/global" -}}
@@ -36,9 +34,19 @@ spec:
       containers:
       - name: mcq
         image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/mcq:v1.0.1
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Vault file render hone ka wait karo
+            while [ ! -f /vault/secrets/config ]; do echo "Waiting for MCQ secrets..."; sleep 1; done;
+            
+            # Environment variables load karo
+            source /vault/secrets/config
+            
+            # Application start karo
+            node apps/mcq-service/src/index.js
         ports:
         - containerPort: 8082
-        # Resource handling for MCQ service
         resources:
           requests:
             memory: "128Mi"

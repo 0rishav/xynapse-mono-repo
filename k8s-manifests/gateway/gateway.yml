@@ -4,7 +4,7 @@ metadata:
   name: gateway-service
   namespace: xynapse-stage
 spec:
-  replicas: 2                 
+  replicas: 2                  
   selector:
     matchLabels:
       app: gateway
@@ -16,7 +16,6 @@ spec:
         - setWeight: 40       
         - pause: {duration: 1m}
         - setWeight: 100     
-  # --- CANARY STRATEGY ---
   template:
     metadata:
       labels:
@@ -24,9 +23,9 @@ spec:
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "xynapse-role"
-        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/gateway"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/global"
         vault.hashicorp.com/agent-inject-template-config: |
-          {{- with secret "secret/data/xynapse/gateway" -}}
+          {{- with secret "secret/data/xynapse/global" -}}
           {{- range $key, $value := .Data.data }}
           export {{ $key }}="{{ $value }}"
           {{- end }}
@@ -34,10 +33,20 @@ spec:
     spec:
       containers:
       - name: gateway
-        image: gcr.io//gateway:v1.0.1
+        image: gcr.io/project-5e783ec5-d363-4cc7-884/gateway:v1.0.1
         ports:
         - containerPort: 8000
+        # --- RESOURCE LIMITS FOR GATEWAY ---
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
 ---
+
 apiVersion: v1
 kind: Service
 metadata:

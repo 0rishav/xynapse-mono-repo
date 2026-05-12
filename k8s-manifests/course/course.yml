@@ -8,7 +8,6 @@ spec:
   selector:
     matchLabels:
       app: course
-  # CANARY STRATEGY
   strategy:
     canary:
       steps:
@@ -24,9 +23,9 @@ spec:
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "xynapse-role" 
-        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/course"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/global"
         vault.hashicorp.com/agent-inject-template-config: |
-          {{- with secret "secret/data/xynapse/course" -}}
+          {{- with secret "secret/data/xynapse/global" -}}
           {{- range $key, $value := .Data.data }}
           export {{ $key }}="{{ $value }}"
           {{- end }}
@@ -34,6 +33,29 @@ spec:
     spec:
       containers:
       - name: course
-        image: gcr.io/project-5e783ec5-d363-4cc7-884/course:v1.0.1
+        image: gcr.io/project-5e783ec5-d363-4cc7-884/course-service:latest 
         ports:
         - containerPort: 8081
+        # --- RESOURCE HANDLING ADDED HERE ---
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: course-service
+  namespace: xynapse-stage
+spec:
+  selector:
+    app: course
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8081

@@ -20,8 +20,8 @@ runs:
       run: |
         FILE_PATH="k8s-manifests/${{ inputs.service_name }}/${{ inputs.service_name }}.yml"
         echo "Updating $FILE_PATH to version ${{ inputs.new_version }}"
-        # Sed command ekdum mast hai, wahi rehne do
-        sed -i "s|image: gcr.io/${{ env.PROJECT_ID }}/${{ inputs.service_name }}:.*|image: gcr.io/${{ env.PROJECT_ID }}/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
+        
+        sed -i "s|image: gcr.io/.*|image: gcr.io/${{ env.PROJECT_ID }}/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
 
     - name: Commit and Push to Repository
       shell: bash

@@ -1,0 +1,41 @@
+name: 'Smart Deploy'
+description: 'Updates K8s manifests with Semantic Tags and triggers ArgoCD'
+
+inputs:
+  service_name:
+    description: 'Name of the service'
+    required: true
+  new_version:
+    description: 'Semantic Version to deploy'
+    required: true
+  github_token:
+    description: 'GH Token for git push'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Update Kubernetes Manifest Tag
+      shell: bash
+      run: |
+        FILE_PATH="k8s-manifests/${{ inputs.service_name }}/${{ inputs.service_name }}.yml"
+        echo "Updating $FILE_PATH to version ${{ inputs.new_version }}"
+        
+        sed -i "s|image: gcr.io/.*|image: gcr.io/${{ env.PROJECT_ID }}/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
+
+    - name: Commit and Push to Repository
+      shell: bash
+      run: |
+        git config user.name "xynapse-bot"
+        git config user.email "bot@xynapse.ai"
+        
+        git add k8s-manifests/
+        
+        if git diff --quiet && git diff --staged --quiet; then
+          echo "No changes to deploy."
+        else
+          git commit -m "chore(gitops): update ${{ inputs.service_name }} to ${{ inputs.new_version }} [skip ci]"
+          
+          TARGET_BRANCH="master" # Ya 'main'
+          git push https://x-access-token:${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:$TARGET_BRANCH
+        fi

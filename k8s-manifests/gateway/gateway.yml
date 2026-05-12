@@ -1,21 +1,29 @@
-# gateway.yml
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1 
+kind: Rollout                
 metadata:
   name: gateway-service
   namespace: xynapse-stage
 spec:
-  replicas: 1
+  replicas: 2                 
   selector:
     matchLabels:
       app: gateway
+  strategy:
+    canary:
+      steps:
+        - setWeight: 10       
+        - pause: {duration: 2m} 
+        - setWeight: 40       
+        - pause: {duration: 1m}
+        - setWeight: 100     
+  # --- CANARY STRATEGY ---
   template:
     metadata:
       labels:
         app: gateway
       annotations:
         vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: "gateway-role"
+        vault.hashicorp.com/role: "xynapse-role"
         vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/gateway"
         vault.hashicorp.com/agent-inject-template-config: |
           {{- with secret "secret/data/xynapse/gateway" -}}
@@ -26,7 +34,7 @@ spec:
     spec:
       containers:
       - name: gateway
-        image: gcr.io/${PROJECT_ID}/gateway-service:latest
+        image: gcr.io/${PROJECT_ID}/gateway-service:latest 
         ports:
         - containerPort: 8000
 ---
@@ -34,6 +42,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: gateway-service
+  namespace: xynapse-stage
 spec:
   selector:
     app: gateway

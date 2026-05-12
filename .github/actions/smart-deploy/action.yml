@@ -37,7 +37,7 @@ runs:
         else
           git commit -m "chore(gitops): update ${{ inputs.service_name }} to ${{ inputs.new_version }} [skip ci]"
           
-          TARGET_BRANCH="master"
+          TARGET_BRANCH="stage"
           
           # IMPORTANT: Pehle fetch aur rebase karo taaki remote changes local mein aa jayein
           # Isse "rejected (fetch first)" wala error khatam ho jayega

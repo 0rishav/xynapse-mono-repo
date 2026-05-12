@@ -1,6 +1,5 @@
-# course.yml
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1 
+kind: Rollout               
 metadata:
   name: course-service
   namespace: xynapse-stage
@@ -9,35 +8,67 @@ spec:
   selector:
     matchLabels:
       app: course
+  strategy:
+    canary:
+      steps:
+        - setWeight: 20       
+        - pause: {duration: 2m} 
+        - setWeight: 50      
+        - pause: {duration: 1m}
+        - setWeight: 100     
   template:
     metadata:
       labels:
         app: course
       annotations:
         vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: "course-role" # Unique Role
-        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/course"
+        vault.hashicorp.com/role: "xynapse-role" 
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/global"
         vault.hashicorp.com/agent-inject-template-config: |
-          {{- with secret "secret/data/xynapse/course" -}}
+          {{- with secret "secret/data/xynapse/global" -}}
           {{- range $key, $value := .Data.data }}
-          export {{ $key }}="{{ $value }}"
+          export {{ $key }}='{{ $value }}'
           {{- end }}
           {{- end -}}
     spec:
       containers:
       - name: course
-        image: gcr.io/${PROJECT_ID}/course-service:latest
+        image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/course:v1.0.1
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # 1. Wait for vault file with content
+            while [ ! -s /vault/secrets/config ]; do echo "Waiting for secrets..."; sleep 2; done;
+            
+            # 2. Source the variables with export enforcement
+            set -a
+            . /vault/secrets/config
+            set +a
+            
+            # 3. Path Fix: Agar Dockerfile WORKDIR set hai toh seedha src/index.js chalega
+            # Agar fir bhi phate toh yahan full path daal dena: node /app/apps/course-service/src/index.js
+            node src/index.js 
         ports:
-        - containerPort: 8081
+        - containerPort: 8002
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"  
+            cpu: "200m"
+
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
   name: course-service
+  namespace: xynapse-stage
 spec:
   selector:
     app: course
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8081
+    targetPort: 8002

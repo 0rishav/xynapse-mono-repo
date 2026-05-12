@@ -1,40 +1,69 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1 
+kind: Rollout                 
 metadata:
   name: identity-service
   namespace: xynapse-stage
 spec:
-  replicas: 1
+  replicas: 1                   
   selector:
     matchLabels:
       app: identity
+  strategy:
+    canary:
+      steps:
+        - setWeight: 25      
+        - pause: {duration: 2m} 
+        - setWeight: 50      
+        - pause: {duration: 1m}
+        - setWeight: 100     
   template:
     metadata:
       labels:
         app: identity
       annotations:
         vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: "identity-role"
-        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/identity"
+        vault.hashicorp.com/role: "xynapse-role"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/xynapse/global"
         vault.hashicorp.com/agent-inject-template-config: |
-          {{- with secret "secret/data/xynapse/identity" -}}
-          export MONGO_URL="{{ .Data.data.mongo_url }}"
+          {{- with secret "secret/data/xynapse/global" -}}
+          {{- range $key, $value := .Data.data }}
+          export {{ $key }}='{{ $value }}'
+          {{- end }}
           {{- end -}}
     spec:
       containers:
       - name: identity
-        image: gcr.io/${PROJECT_ID}/identity-service:latest 
+        image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/identity:v1.0.1
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while [ ! -s /vault/secrets/config ]; do echo "Waiting for identity secrets..."; sleep 2; done;
+            
+            set -a
+            . /vault/secrets/config
+            set +a
+            node src/index.js || node apps/identity-service/src/index.js
         ports:
-        - containerPort: 8080
+        - containerPort: 8001
+        resources:
+          requests:
+            memory: "256Mi" 
+            cpu: "100m"
+          limits:
+            memory: "512Mi" 
+            cpu: "300m"
+
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
   name: identity-service
+  namespace: xynapse-stage
 spec:
   selector:
     app: identity
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8080
+    targetPort: 8001

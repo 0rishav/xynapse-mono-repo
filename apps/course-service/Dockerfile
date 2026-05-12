@@ -11,6 +11,9 @@ RUN npm install --omit=dev
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+#RUN addgroup -S nodejs && adduser -S rishav -G nodejs
+#USER rishav
+
 # Identity ki tarah abhi root pe hi rakhte hain testing ke liye
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json ./package.json

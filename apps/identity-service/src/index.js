@@ -29,6 +29,8 @@ const PORT = process.env.IDENTITY_PORT || 5001;
 const ENVIRONMENT = process.env.NODE_ENV;
 
 console.log(ENVIRONMENT)
+console.log(ENVIRONMENT)
+
 
 const startServer = async () => {
   try {

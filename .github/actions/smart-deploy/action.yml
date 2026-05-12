@@ -1,0 +1,69 @@
+name: 'Smart Deploy'
+description: 'Updates K8s manifests with Semantic Tags and triggers ArgoCD'
+
+inputs:
+  service_name:
+    description: 'Name of the service'
+    required: true
+  new_version:
+    description: 'Semantic Version to deploy'
+    required: true
+  github_token:
+    description: 'GH Token for git push'
+    required: true
+  project_id:        
+    description: 'GCP Project ID'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Update Kubernetes Manifest Tag
+      shell: bash
+      run: |
+        FILE_PATH="k8s-manifests/${{ inputs.service_name }}/${{ inputs.service_name }}.yml"
+        sed -i "s|image: .*|image: us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
+        echo "Updated $FILE_PATH with new image path: us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.new_version }}"
+
+    - name: Commit and Push to Repository
+      shell: bash
+      run: |
+        git config user.name "xynapse-bot"
+        git config user.email "bot@xynapse.ai"
+        
+        git add k8s-manifests/
+        
+        if git diff --quiet && git diff --staged --quiet; then
+          echo "No changes to deploy."
+        else
+          git commit -m "chore(gitops): update ${{ inputs.service_name }} to ${{ inputs.new_version }} [skip ci]"
+          
+          TARGET_BRANCH="stage"
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          
+          # Matrix jobs ki race condition handle karne ke liye Retry Loop
+          until [ $RETRY_COUNT -ge $MAX_RETRIES ]
+          do
+            echo "Attempt $((RETRY_COUNT+1)) to push changes..."
+            
+            # Fetch aur Rebase har retry pe zaruri hai
+            git fetch origin $TARGET_BRANCH
+            git rebase origin/$TARGET_BRANCH || { git rebase --abort; echo "Rebase failed"; }
+
+            # Push command
+            if git push https://x-access-token:${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:$TARGET_BRANCH; then
+              echo "Push successful!"
+              exit 0
+            else
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              # Random delay taaki saare jobs ek hi saath wapas na takrayein
+              WAIT_TIME=$(( (RANDOM % 5) + 1 ))
+              echo "Push failed (likely race condition). Retrying in $WAIT_TIME seconds..."
+              sleep $WAIT_TIME
+            fi
+          done
+
+          echo "Failed to push after $MAX_RETRIES attempts."
+          exit 1
+        fi

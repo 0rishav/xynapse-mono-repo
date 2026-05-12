@@ -34,6 +34,6 @@ spec:
     spec:
       containers:
       - name: course
-        image: gcr.io//course:v1.0.1
+        image: gcr.io/project-5e783ec5-d363-4cc7-884/course:v1.0.1
         ports:
         - containerPort: 8081

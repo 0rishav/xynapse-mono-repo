@@ -11,6 +11,9 @@ inputs:
   github_token:
     description: 'GH Token for git push'
     required: true
+  project_id:        
+    description: 'GCP Project ID'
+    required: true
 
 runs:
   using: "composite"
@@ -19,10 +22,8 @@ runs:
       shell: bash
       run: |
         FILE_PATH="k8s-manifests/${{ inputs.service_name }}/${{ inputs.service_name }}.yml"
-        echo "Updating $FILE_PATH to version ${{ inputs.new_version }}"
-        
-        # Sed command updated for maximum flexibility
-        sed -i "s|image: gcr.io/.*|image: gcr.io/${{ env.PROJECT_ID }}/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
+        # Sed command mein inputs.project_id use karo
+        sed -i "s|image: gcr.io/.*|image: gcr.io/${{ inputs.project_id }}/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
 
     - name: Commit and Push to Repository
       shell: bash

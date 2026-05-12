@@ -96,6 +96,10 @@ jobs:
           image_tag: ${{ env.NEW_TAG }}
           slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
+      - name: Post-build cleanup
+        if: always()
+        run: sudo docker system prune -f
+
   deploy:
     needs: [detect-changes, build]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
@@ -140,3 +144,5 @@ jobs:
           service_name: ${{ matrix.service }}
           new_version: ${{ env.NEW_TAG }}
           github_token: ${{ secrets.GH_PAT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+      

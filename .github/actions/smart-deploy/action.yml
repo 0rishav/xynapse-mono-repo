@@ -39,12 +39,31 @@ runs:
           git commit -m "chore(gitops): update ${{ inputs.service_name }} to ${{ inputs.new_version }} [skip ci]"
           
           TARGET_BRANCH="stage"
+          MAX_RETRIES=5
+          RETRY_COUNT=0
           
-          # IMPORTANT: Pehle fetch aur rebase karo taaki remote changes local mein aa jayein
-          # Isse "rejected (fetch first)" wala error khatam ho jayega
-          git fetch origin $TARGET_BRANCH
-          git pull --rebase origin $TARGET_BRANCH
-          
-          # Ab push maaro
-          git push https://x-access-token:${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:$TARGET_BRANCH
+          # Matrix jobs ki race condition handle karne ke liye Retry Loop
+          until [ $RETRY_COUNT -ge $MAX_RETRIES ]
+          do
+            echo "Attempt $((RETRY_COUNT+1)) to push changes..."
+            
+            # Fetch aur Rebase har retry pe zaruri hai
+            git fetch origin $TARGET_BRANCH
+            git rebase origin/$TARGET_BRANCH || { git rebase --abort; echo "Rebase failed"; }
+
+            # Push command
+            if git push https://x-access-token:${{ inputs.github_token }}@github.com/${{ github.repository }}.git HEAD:$TARGET_BRANCH; then
+              echo "Push successful!"
+              exit 0
+            else
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              # Random delay taaki saare jobs ek hi saath wapas na takrayein
+              WAIT_TIME=$(( (RANDOM % 5) + 1 ))
+              echo "Push failed (likely race condition). Retrying in $WAIT_TIME seconds..."
+              sleep $WAIT_TIME
+            fi
+          done
+
+          echo "Failed to push after $MAX_RETRIES attempts."
+          exit 1
         fi

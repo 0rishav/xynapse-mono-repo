@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
       - name: identity
-        image: gcr.io/project-5e783ec5-d363-4cc7-884/identity:v1.0.1
+        image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/identity:v1.0.1
         ports:
         - containerPort: 8080
         # Resource limits for Identity service

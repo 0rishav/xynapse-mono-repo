@@ -22,12 +22,8 @@ runs:
       shell: bash
       run: |
         FILE_PATH="k8s-manifests/${{ inputs.service_name }}/${{ inputs.service_name }}.yml"
-        
-        # 1. Purane image path ko naye Artifact Registry path se replace karo
-        # Hum 'image: .*' use kar rahe hain taaki manifest mein kuch bhi ho, wo overwrite ho jaye
         sed -i "s|image: .*|image: us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.new_version }}|g" $FILE_PATH
-        
-        echo "Updated $FILE_PATH with new image path."
+        echo "Updated $FILE_PATH with new image path: us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.new_version }}"
 
     - name: Commit and Push to Repository
       shell: bash

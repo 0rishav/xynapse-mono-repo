@@ -20,8 +20,8 @@ env:
   TF_WORKING_DIR: ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
 
 jobs:
-  terraform-init:
-    name: "Terraform Init"
+  terraform-plan:
+    name: "Terraform Init & Plan"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,37 +44,6 @@ jobs:
           terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.base_ref || github.ref_name }}"
-
-      - name: Cache .terraform directory
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.TF_WORKING_DIR }}/.terraform
-          key: terraform-${{ github.run_id }}
-
-  terraform-plan:
-    name: "Terraform Plan"
-    needs: terraform-init
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ env.TF_WORKING_DIR }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_SA_EMAIL }}
-          export_environment_variables: true
-
-      - uses: hashicorp/setup-terraform@v3
-
-      - name: Restore .terraform cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env.TF_WORKING_DIR }}/.terraform
-          key: terraform-${{ github.run_id }}
 
       - name: Terraform Plan
         run: |
@@ -117,7 +86,8 @@ jobs:
 
       - name: Terraform Init
         run: |
-          terraform init \
+          rm -rf .terraform
+          terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.ref_name }}"
 

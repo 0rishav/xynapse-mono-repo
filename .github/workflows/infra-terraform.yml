@@ -28,7 +28,6 @@ jobs:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
     env:
-      # FIX: stage branch ke liye 'dev' folder, baki sab 'prod'
       TF_WORKING_DIR: >-
         ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') 
             && './infrastructure/terraform/environments/prod' 
@@ -51,6 +50,19 @@ jobs:
             ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
                 github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
                 'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
+
+      # --- DEBUG LOGS START ---
+      - name: Debug Auth & Environment
+        run: |
+          echo "--- DEBUG INFO ---"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Working Dir: ${{ env.TF_WORKING_DIR }}"
+          echo "Active Account:"
+          gcloud config get-value account
+          echo "Authenticated Accounts:"
+          gcloud auth list
+          echo "------------------"
+      # --- DEBUG LOGS END ---
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -80,7 +92,6 @@ jobs:
       }}
 
     env:
-      # FIX: stage branch ke liye 'dev' folder use hoga
       TF_WORKING_DIR: >-
         ${{ (github.ref_name == 'main' || github.ref_name == 'release') 
             && './infrastructure/terraform/environments/prod' 
@@ -103,6 +114,19 @@ jobs:
             ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
                 github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
                 'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
+
+      # --- DEBUG LOGS START ---
+      - name: Debug Auth & Environment
+        run: |
+          echo "--- DEBUG INFO ---"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Working Dir: ${{ env.TF_WORKING_DIR }}"
+          echo "Active Account:"
+          gcloud config get-value account
+          echo "Authenticated Accounts:"
+          gcloud auth list
+          echo "------------------"
+      # --- DEBUG LOGS END ---
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

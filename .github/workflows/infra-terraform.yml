@@ -52,15 +52,35 @@ jobs:
                 'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
 
       # --- DEBUG LOGS START ---
-      - name: Debug Auth & Environment
+      - name: Debug Secrets & Auth
         run: |
           echo "--- DEBUG INFO ---"
           echo "Branch: ${{ github.ref_name }}"
           echo "Working Dir: ${{ env.TF_WORKING_DIR }}"
+          
+          echo "Checking Secrets Lengths (0 means empty):"
+          echo "GCP_PROJECT_ID length: ${#secrets.GCP_PROJECT_ID}"
+          echo "GCS_BUCKET_NAME length: ${#secrets.GCS_BUCKET_NAME}"
+          
+          # Secrets ki value nahi, bas pehle 2 characters print honge confirm karne ke liye
+          echo "GCP_PROJECT_ID (first 2 chars): ${secrets.GCP_PROJECT_ID:0:2}..."
+          
           echo "Active Account:"
-          gcloud config get-value account
+          gcloud config get-value account || echo "No account set"
+          
           echo "Authenticated Accounts:"
           gcloud auth list
+          
+          echo "Credentials File Path:"
+          echo "${{ steps.auth.outputs.credentials_file_path }}"
+          
+          if [ -n "${{ steps.auth.outputs.credentials_file_path }}" ]; then
+            echo "Auth file path exists, checking content..."
+            # Credentials file ka first 50 chars read karo
+            head -c 50 "${{ steps.auth.outputs.credentials_file_path }}"
+          else
+            echo "Auth file path is empty!"
+          fi
           echo "------------------"
       # --- DEBUG LOGS END ---
 

@@ -3,41 +3,6 @@ provider "google" {
   region  = var.region
 }
 
-import {
-  id = "projects/xynapse-system/locations/us-central1/clusters/xynapse-dev-gke/nodePools/xynapse-dev-gke-node-pool"
-  to = module.gke.google_container_node_pool.primary_nodes
-}
-
-import {
-  id = "projects/xynapse-system/global/networks/xynapse-dev-vpc"
-  to = module.vpc.google_compute_network.main
-}
-
-import {
-  id = "projects/xynapse-system/regions/us-central1/subnetworks/xynapse-dev-vpc-private-subnet"
-  to = module.vpc.google_compute_subnetwork.private
-}
-
-import {
-  id = "projects/xynapse-system/regions/us-central1/subnetworks/xynapse-dev-vpc-arc-subnet"
-  to = module.vpc.google_compute_subnetwork.arc_subnet
-}
-
-import {
-  id = "projects/xynapse-system/regions/us-central1/routers/xynapse-dev-vpc-router"
-  to = module.vpc.google_compute_router.router
-}
-
-import {
-  id = "projects/xynapse-system/regions/us-central1/routers/xynapse-dev-vpc-router/xynapse-dev-vpc-nat"
-  to = module.vpc.google_compute_router_nat.nat
-}
-
-import {
-  id = "projects/xynapse-system/locations/us-central1/clusters/xynapse-dev-gke"
-  to = module.gke.google_container_cluster.primary
-}
-
 # 1. VPC Module
 module "vpc" {
   source              = "../../modules/vpc"

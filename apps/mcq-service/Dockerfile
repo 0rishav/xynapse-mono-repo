@@ -11,14 +11,17 @@ RUN npm install --omit=dev
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-#RUN addgroup -S nodejs && adduser -S rishav -G nodejs
-#USER rishav
+# 1. System user 'node' ka ownership lo
+RUN chown -R node:node /app
 
+# 2. Files copy karo (root ke context mein)
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json ./package.json
-
 COPY packages/common ./packages/common
 COPY apps/mcq-service ./apps/mcq-service
+
+# 3. Yahan switch karo taaki security audit pass ho
+USER node
 
 WORKDIR /app/apps/mcq-service
 

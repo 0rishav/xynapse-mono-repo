@@ -45,6 +45,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:

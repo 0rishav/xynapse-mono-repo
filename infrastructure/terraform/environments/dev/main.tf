@@ -8,6 +8,21 @@ import {
   to = module.vpc.google_compute_network.main
 }
 
+import {
+  id = "projects/xynapse-system/regions/us-central1/subnetworks/xynapse-dev-vpc-private-subnet"
+  to = module.vpc.google_compute_subnetwork.private
+}
+
+import {
+  id = "projects/xynapse-system/regions/us-central1/subnetworks/xynapse-dev-vpc-arc-subnet"
+  to = module.vpc.google_compute_subnetwork.arc_subnet
+}
+
+import {
+  id = "projects/xynapse-system/regions/us-central1/routers/xynapse-dev-vpc-router"
+  to = module.vpc.google_compute_router.router
+}
+
 # 1. VPC Module
 module "vpc" {
   source              = "../../modules/vpc"

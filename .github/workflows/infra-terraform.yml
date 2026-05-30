@@ -2,18 +2,11 @@ name: "Infrastructure Deployment"
 
 on:
   push:
-    branches:
-      - stage
-      - main
-      - release
-    paths:
-      - 'infrastructure/terraform/**'
+    branches: [ stage, main, release ]
+    paths: [ 'infrastructure/terraform/**' ]
   pull_request:
-    branches:
-      - main
-      - release
-    paths:
-      - 'infrastructure/terraform/**'
+    branches: [ main, release ]
+    paths: [ 'infrastructure/terraform/**' ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,57 +16,25 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  TF_WORKING_DIR: ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
+  GCP_SA: ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' || github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' || 'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
+
 jobs:
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
-    env:
-      TF_WORKING_DIR: >-
-        ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') 
-            && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/dev' }}
-
-    defaults:
-      run:
-        working-directory: ${{ env.TF_WORKING_DIR }}
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - id: 'auth'
-        name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: >-
-            ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
-                github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
-                'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
+          service_account: ${{ env.GCP_SA }}
           export_environment_variables: true
 
-      - name: Debug Secrets & Auth
-        env:
-          MY_GCP_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
-          MY_GCS_BUCKET: ${{ secrets.GCS_BUCKET_NAME }}
-        run: |
-          echo "--- DEBUG INFO ---"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Working Dir: ${{ env.TF_WORKING_DIR }}"
-          
-          echo "Checking Secrets Lengths (0 means empty):"
-          echo "Project ID length: ${#MY_GCP_PROJECT}"
-          echo "Bucket Name length: ${#MY_GCS_BUCKET}"
-          
-          echo "Active Account:"
-          gcloud config get-value account || echo "No account set"
-          
-          echo "Authenticated Accounts:"
-          gcloud auth list
-      # --- DEBUG LOGS END ---
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         run: |
@@ -85,59 +46,28 @@ jobs:
         run: |
           terraform plan -no-color -input=false \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="job_id=${{ github.run_id }}"
+            -var="job_id=${{ github.run_id }}" \
+            -var="repo_owner=${{ github.repository_owner }}" \
+            -var="repo_name=${{ github.event.repository.name }}" \
+            -var="github_token=${{ secrets.GITHUB_TOKEN }}"
 
   terraform-apply:
     name: "Terraform Apply"
     needs: terraform-plan
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    
-    environment: >-
-      ${{ github.ref_name == 'main' && 'production' || 
-          github.ref_name == 'release' && 'release' || 
-          'staging' 
-      }}
-
-    env:
-      TF_WORKING_DIR: >-
-        ${{ (github.ref_name == 'main' || github.ref_name == 'release') 
-            && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/dev' }}
-
-    defaults:
-      run:
-        working-directory: ${{ env.TF_WORKING_DIR }}
-
+    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - id: 'auth'
-        name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: >-
-            ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
-                github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
-                'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
+          service_account: ${{ env.GCP_SA }}
+          export_environment_variables: true
 
-      # --- DEBUG LOGS START ---
-      - name: Debug Auth & Environment
-        run: |
-          echo "--- DEBUG INFO ---"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Working Dir: ${{ env.TF_WORKING_DIR }}"
-          echo "Active Account:"
-          gcloud config get-value account
-          echo "Authenticated Accounts:"
-          gcloud auth list
-          echo "------------------"
-      # --- DEBUG LOGS END ---
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         run: |
@@ -149,4 +79,7 @@ jobs:
         run: |
           terraform apply -auto-approve -input=false \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="job_id=${{ github.run_id }}"
+            -var="job_id=${{ github.run_id }}" \
+            -var="repo_owner=${{ github.repository_owner }}" \
+            -var="repo_name=${{ github.event.repository.name }}" \
+            -var="github_token=${{ secrets.GITHUB_TOKEN }}"

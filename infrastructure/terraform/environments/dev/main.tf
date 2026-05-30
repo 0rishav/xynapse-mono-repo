@@ -23,6 +23,16 @@ import {
   to = module.vpc.google_compute_router.router
 }
 
+import {
+  id = "projects/xynapse-system/regions/us-central1/routers/xynapse-dev-vpc-router/xynapse-dev-vpc-nat"
+  to = module.vpc.google_compute_router_nat.nat
+}
+
+import {
+  id = "projects/xynapse-system/locations/us-central1/clusters/xynapse-dev-gke"
+  to = module.gke.google_container_cluster.primary
+}
+
 # 1. VPC Module
 module "vpc" {
   source              = "../../modules/vpc"

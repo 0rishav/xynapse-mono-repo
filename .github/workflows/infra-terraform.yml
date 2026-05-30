@@ -24,24 +24,23 @@ jobs:
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
       - uses: actions/checkout@v4
-      
       - id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ env.GCP_SA }}
           export_environment_variables: true
-
       - uses: hashicorp/setup-terraform@v3
-
       - name: Terraform Init
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.base_ref || github.ref_name }}"
-
       - name: Terraform Plan
         run: |
           terraform plan -no-color -input=false \
@@ -57,24 +56,23 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
       - uses: actions/checkout@v4
-      
       - id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ env.GCP_SA }}
           export_environment_variables: true
-
       - uses: hashicorp/setup-terraform@v3
-
       - name: Terraform Init
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.ref_name }}"
-
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve -input=false \

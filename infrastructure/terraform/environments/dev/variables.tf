@@ -15,7 +15,7 @@ variable "job_id" {
 }
 
 variable "repo_owner" {
-  description = "GitHub username or org"
+  description = "GitHub username or organization"
   type        = string
 }
 

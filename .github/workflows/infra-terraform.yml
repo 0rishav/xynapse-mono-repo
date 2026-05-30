@@ -50,6 +50,7 @@ jobs:
             ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
                 github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
                 'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
+          export_environment_variables: true
 
       - name: Debug Secrets & Auth
         env:

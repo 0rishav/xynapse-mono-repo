@@ -4,6 +4,11 @@ provider "google" {
 }
 
 import {
+  id = "projects/xynapse-system/locations/us-central1/clusters/xynapse-dev-gke/nodePools/xynapse-dev-gke-node-pool"
+  to = module.gke.google_container_node_pool.primary_nodes
+}
+
+import {
   id = "projects/xynapse-system/global/networks/xynapse-dev-vpc"
   to = module.vpc.google_compute_network.main
 }

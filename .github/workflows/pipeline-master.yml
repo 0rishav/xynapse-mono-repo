@@ -15,7 +15,7 @@ on:
 jobs:
   # DECISION MAKER
   detect-changes:
-    runs-on: [self-hosted, xynapse-runner-set]
+    runs-on: [xynapse-runner-set]
     outputs:
       services: ${{ steps.filter.outputs.changes }}
     steps:
@@ -35,7 +35,7 @@ jobs:
   analyze:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: [self-hosted, xynapse-runner-set]
+    runs-on: [xynapse-runner-set]
     permissions:
       actions: read
       contents: read
@@ -55,7 +55,7 @@ jobs:
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: [self-hosted, xynapse-runner-set]
+    runs-on: [xynapse-runner-set]
     strategy:
       fail-fast: false
       matrix:
@@ -103,7 +103,7 @@ jobs:
   deploy:
     needs: [detect-changes, wait-for-approval]
     if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
-    runs-on: [self-hosted, xynapse-runner-set]
+    runs-on: [xynapse-runner-set]
     permissions:
       contents: write
       id-token: write

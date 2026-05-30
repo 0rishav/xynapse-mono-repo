@@ -28,10 +28,11 @@ jobs:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
     env:
+      # FIX: stage branch ke liye 'dev' folder, baki sab 'prod'
       TF_WORKING_DIR: >-
-        ${{ (contains(github.ref, 'main') || contains(github.ref, 'release') || contains(github.base_ref, 'main') || contains(github.base_ref, 'release')) 
+        ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') 
             && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/stage' }}
+            || './infrastructure/terraform/environments/dev' }}
 
     defaults:
       run:
@@ -46,7 +47,6 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          # Dynamic SA selection based on branch
           service_account: >-
             ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
                 github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
@@ -80,10 +80,11 @@ jobs:
       }}
 
     env:
+      # FIX: stage branch ke liye 'dev' folder use hoga
       TF_WORKING_DIR: >-
         ${{ (github.ref_name == 'main' || github.ref_name == 'release') 
             && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/stage' }}
+            || './infrastructure/terraform/environments/dev' }}
 
     defaults:
       run:
@@ -98,7 +99,6 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          # Dynamic SA selection (Same as plan)
           service_account: >-
             ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
                 github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||

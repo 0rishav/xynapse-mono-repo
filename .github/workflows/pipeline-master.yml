@@ -55,7 +55,7 @@ jobs:
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: xynapse-runner-set  
+    runs-on: xynapse-runner-set
     strategy:
       fail-fast: false
       matrix:
@@ -78,12 +78,9 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
-      - name: Docker Login (GCR)
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-
       - name: Generate Semantic Version
         id: semver
-        run: bash .github/scripts/generate-semantic-version.sh
+        run: bash .github/scripts/generate-semantic-version.sh ${{ matrix.service }}
 
       - name: Execute Smart Build
         uses: ./.github/actions/smart-build
@@ -92,10 +89,6 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           image_tag: ${{ env.NEW_TAG }}
           slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Post-build cleanup
-        if: always()
-        run: sudo docker system prune -f
 
   # APPROVAL GATE - SIRF EK BAAR APPROVE KARO
   wait-for-approval:

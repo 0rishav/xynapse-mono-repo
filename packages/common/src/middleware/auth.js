@@ -21,6 +21,8 @@ export const isAuthenticated = CatchAsyncError(async (req, res, next) => {
 
     console.log(decodedToken)
     console.log(decodedToken)
+    console.log(decodedToken)
+    console.log(decodedToken)
 
 
     req.user = {

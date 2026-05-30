@@ -23,8 +23,7 @@ jobs:
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
-    # Plan ke liye bhi environment define karna zaruri hai taaki secret access ho sake
-    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
+    # ENVIRONMENT HATA DIYA HAI TAAKI MANUAL APPROVAL NA MAANGE
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -53,6 +52,7 @@ jobs:
     needs: terraform-plan
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # YAHAN ENVIRONMENT RAKHA HAI, ISILIYE YE MANUAL APPROVAL MAANGEGA
     environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
     defaults:
       run:

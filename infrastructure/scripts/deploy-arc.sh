@@ -7,7 +7,7 @@ RETRY_COUNT=0
 
 # Cluster Config
 CLUSTER_NAME="xynapse-dev-gke"
-REGION="asia-south1"
+REGION="us-central1"
 
 echo "Connecting to cluster..."
 gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $GCP_PROJECT_ID

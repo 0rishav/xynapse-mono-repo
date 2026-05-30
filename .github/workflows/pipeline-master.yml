@@ -13,9 +13,9 @@ on:
       - 'packages/common/**'
 
 jobs:
-  # DECISION MAKER 
+  # DECISION MAKER
   detect-changes:
-    runs-on: [self-hosted] 
+    runs-on: ubuntu-latest  # self-hosted se ubuntu-latest kiya
     outputs:
       services: ${{ steps.filter.outputs.changes }}
     steps:
@@ -31,11 +31,11 @@ jobs:
             mcq: ['apps/mcq-service/**', 'packages/common/**']
             gateway: ['apps/gateway-service/**', 'packages/common/**']
 
-  # CODE QUALITY 
+  # CODE QUALITY
   analyze:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
@@ -44,45 +44,42 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: 'javascript' 
+          languages: 'javascript'
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-  # HIGH-PERFORMANCE BUILD 
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: >-
-      ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') 
-            && 'arc-runner-prod-fresh' || 'arc-runner-dev-fresh' }}
+    runs-on: xynapse-runner-set  
     strategy:
-      fail-fast: false 
+      fail-fast: false
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.services) }}
     permissions:
       contents: write
-      id-token: write 
+      id-token: write
       security-events: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - name: Google OIDC Auth
         uses: 'google-github-actions/auth@v2'
         with:
-          token_format: 'access_token'     
-          create_credentials_file: true    
+          token_format: 'access_token'
+          create_credentials_file: true
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
       - name: Docker Login (GCR)
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet 
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Generate Semantic Version
         id: semver
@@ -100,25 +97,28 @@ jobs:
         if: always()
         run: sudo docker system prune -f
 
-  deploy:
-    needs: [detect-changes, build]
-    if: ${{ needs.detect-changes.outputs.services != '[]' }}
+  # APPROVAL GATE - SIRF EK BAAR APPROVE KARO
+  wait-for-approval:
+    needs: build
+    if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
-    
-    # Manual Approval Logic
-    environment: >-
-      ${{ github.ref == 'refs/heads/main' && 'production' || 
-          github.ref == 'refs/heads/release' && 'release' || 
-          'staging' }}
-    
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/release' && 'release' || 'staging' }}
+    steps:
+      - name: Approval Received
+        run: echo "✅ Approved! Deploying all services..."
+
+
+  deploy:
+    needs: [detect-changes, wait-for-approval]
+    if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write 
-
+      id-token: write
     strategy:
+      fail-fast: false
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.services) }}
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -126,18 +126,15 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
-      # Naye Runner pe Login
       - name: Google OIDC Auth
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
 
-      # Version calculate 
       - name: Get Version
-        run: bash .github/scripts/generate-semantic-version.sh
+        run: bash .github/scripts/generate-semantic-version.sh ${{ matrix.service }}
 
-      # Smart Deploy 
       - name: Run Smart Deploy
         uses: ./.github/actions/smart-deploy
         with:
@@ -145,4 +142,3 @@ jobs:
           new_version: ${{ env.NEW_TAG }}
           github_token: ${{ secrets.GH_PAT }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-      

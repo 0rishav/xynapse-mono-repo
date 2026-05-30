@@ -10,19 +10,19 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # CLEANUP TMP 
+    # CLEANUP TMP
     - name: Cleanup Runner Environment
       shell: bash
       run: |
         sudo rm -rf /tmp/gitleaks.tmp /tmp/gitleaks-8.24.3 || true
         docker system prune -f --filter "until=24h" || true
 
-    #  DETECTION 
+    # SECRET DETECTION
     - name: Secret Detection
       uses: gitleaks/gitleaks-action@v2
       env:
         GITHUB_TOKEN: ${{ github.token }}
-        GITLEAKS_ARTIFACT_NAME: gitleaks-report-${{ inputs.service_name }} 
+        GITLEAKS_ARTIFACT_NAME: gitleaks-report-${{ inputs.service_name }}
       with:
         report-path: gitleaks-report-${{ inputs.service_name }}.json
       continue-on-error: true
@@ -38,49 +38,58 @@ runs:
     - name: Setup Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # LOCAL BUILD & TRIVY SCAN
-    - name: Build Local Image
+    # ARTIFACT REGISTRY AUTH
+    - name: Ensure Artifact Registry Repo & Auth
       shell: bash
       run: |
+        if ! gcloud artifacts repositories describe xynapse-mono-repo --location=us-central1 --project=${{ inputs.project_id }} >/dev/null 2>&1; then
+          gcloud artifacts repositories create xynapse-mono-repo \
+            --repository-format=docker \
+            --location=us-central1 \
+            --project=${{ inputs.project_id }}
+        fi
+        gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+    # EK HI BAAR BUILD KARO - LOAD KARKE SCAN KARO
+    - name: Build Image Locally
+      shell: bash
+      run: |
+        IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}"
         docker buildx build \
           --load \
           -t test-image:${{ github.sha }} \
+          --cache-from type=registry,ref=${IMAGE}:cache \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
           -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
 
+    # TRIVY SCAN - PINNED VERSION
     - name: Trivy Security Scan
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.30.0
       with:
         image-ref: 'test-image:${{ github.sha }}'
         format: 'json'
         output: 'report-${{ inputs.service_name }}.json'
         severity: 'CRITICAL,HIGH'
-        exit-code: '0' 
+        exit-code: '0'
 
-    # DOCKER LOGIN  
-    - name: Ensure Artifact Registry Repo & Auth
-      shell: bash
-      run: |
-        if ! gcloud artifacts repositories describe xynapse-mono-repo --location=us-central1 --project=${{ inputs.project_id }} >/dev/null 2>&1; then
-          gcloud artifacts repositories create xynapse-mono-repo --repository-format=docker --location=us-central1 --project=${{ inputs.project_id }}
-        fi
-        gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-
-    # FINAL PUSH 
-    - name: Build and Push to Artifact Registry
+    # TAG KARO AUR PUSH KARO - DOBARA BUILD NAHI
+    - name: Tag and Push to Artifact Registry
       shell: bash
       run: |
         IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}"
+        docker tag test-image:${{ github.sha }} ${IMAGE}:${{ github.sha }}
+        docker tag test-image:${{ github.sha }} ${IMAGE}:${{ inputs.image_tag }}
+        docker tag test-image:${{ github.sha }} ${IMAGE}:latest
+        docker push ${IMAGE}:${{ github.sha }}
+        docker push ${IMAGE}:${{ inputs.image_tag }}
+        docker push ${IMAGE}:latest
+        # Cache update
         docker buildx build \
           --push \
-          -t ${IMAGE}:${{ github.sha }} \
-          -t ${IMAGE}:${{ inputs.image_tag }} \
-          -t ${IMAGE}:latest \
-          --cache-from type=registry,ref=${IMAGE}:cache \
           --cache-to type=registry,ref=${IMAGE}:cache,mode=max \
-          --build-arg BUILDKIT_INLINE_CACHE=1 \
           -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
 
-    # COSIGN SIGNING 
+    # COSIGN SIGNING
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3.5.0
 
@@ -90,7 +99,7 @@ runs:
         IMAGE_REF="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.image_tag }}"
         cosign sign --yes ${IMAGE_REF}
 
-    # SUMMARY GENERATION
+    # SUMMARY
     - name: Generate Build Summary
       shell: bash
       if: always()
@@ -101,10 +110,10 @@ runs:
         echo "| **Secrets Scan** | Done | Gitleaks |" >> $GITHUB_STEP_SUMMARY
         echo "| **Infra Audit** | Passed | Docker-Audit |" >> $GITHUB_STEP_SUMMARY
         echo "| **Vulnerabilities** | Scanned | Trivy |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Registry Status** | Pushed | GCR |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Registry Status** | Pushed & Signed | GCR |" >> $GITHUB_STEP_SUMMARY
 
-    # ARCHIVE & NOTIFY
-    - name: Archive Security Report
+    # ARCHIVE
+    - name: Archive Security Reports
       uses: actions/upload-artifact@v4
       if: always()
       with:
@@ -114,6 +123,7 @@ runs:
           gitleaks-report-${{ inputs.service_name }}.json
         retention-days: 7
 
+    # SLACK NOTIFY
     - name: Notify Slack
       if: always()
       shell: bash

@@ -18,12 +18,13 @@ permissions:
 
 env:
   TF_WORKING_DIR: ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
-  GCP_SA: ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' || github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' || 'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
 
 jobs:
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
+    # Plan ke liye bhi environment define karna zaruri hai taaki secret access ho sake
+    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -33,7 +34,7 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ env.GCP_SA }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
           export_environment_variables: true
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
@@ -62,7 +63,7 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ env.GCP_SA }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
           export_environment_variables: true
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform Init
@@ -74,20 +75,21 @@ jobs:
             -var="job_id=${{ github.run_id }}" \
             -var="repo_owner=${{ github.repository_owner }}" \
             -var="repo_name=${{ github.event.repository.name }}" \
-            -var="github_token=${{ secrets.GH_PAT }}" 
+            -var="github_token=${{ secrets.GH_PAT }}"
 
   deploy-arc:
     name: "Deploy ARC Controller"
     needs: terraform-apply
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
       - id: 'auth'
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ env.GCP_SA }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
       - name: 'Set up GKE credentials'
         uses: 'google-github-actions/get-gke-credentials@v2'
         with:

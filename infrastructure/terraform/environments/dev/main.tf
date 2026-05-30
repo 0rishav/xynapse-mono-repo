@@ -42,16 +42,3 @@ module "security" {
   vpc_id       = module.vpc.vpc_id
   network_name = module.vpc.network_name
 }
-
-# 5. Ephemeral ARC Runner Module
-module "arc_runner" {
-  source                = "../../modules/arc-runner"
-  job_id                = var.job_id
-  vpc_id                = module.vpc.vpc_id
-  arc_subnet_id         = module.vpc.arc_subnet_id
-  repo_owner            = var.repo_owner
-  repo_name             = var.repo_name
-  github_token          = var.github_token
-  service_account_email = module.iam.arc_sa_email
-  zone                  = "${var.region}-a"
-}

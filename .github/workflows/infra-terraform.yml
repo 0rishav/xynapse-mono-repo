@@ -118,7 +118,7 @@ jobs:
         uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: 'xynapse-dev-gke'
-          location: 'asia-south1'
+          location: 'us-central1'
 
       - name: Deploy ARC via Helm
         run: chmod +x infrastructure/scripts/deploy-arc.sh && ./infrastructure/scripts/deploy-arc.sh

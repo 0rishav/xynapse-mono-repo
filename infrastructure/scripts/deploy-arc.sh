@@ -12,18 +12,15 @@ REGION="us-central1"
 echo "Connecting to cluster..."
 gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $GCP_PROJECT_ID
 
-helm repo add actions-runner-controller https://actions.github.io/actions-runner-controller
-helm repo update
-
 deploy_arc() {
   echo "Installing ARC Controller..."
   helm upgrade --install arc \
-    actions-runner-controller/gha-runner-scale-set-controller \
+    oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller \
     --namespace arc-systems --create-namespace
 
   echo "Installing Runner Scale Set..."
   helm upgrade --install xynapse-runner-set \
-    actions-runner-controller/gha-runner-scale-set \
+    oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
     --namespace arc-runners --create-namespace \
     --set githubConfigUrl="https://github.com/$REPO_OWNER/$REPO_NAME" \
     --set githubConfigSecret.github_token=$GITHUB_TOKEN

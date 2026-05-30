@@ -20,27 +20,62 @@ env:
   TF_WORKING_DIR: ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
 
 jobs:
-  terraform-plan:
-    name: "Terraform Plan"
+  terraform-init:
+    name: "Terraform Init"
     runs-on: ubuntu-latest
-    # ENVIRONMENT HATA DIYA HAI TAAKI MANUAL APPROVAL NA MAANGE
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
       - uses: actions/checkout@v4
-      - id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
           export_environment_variables: true
+
       - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         run: |
           rm -rf .terraform
-          terraform init -reconfigure -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" -backend-config="prefix=terraform/state/${{ github.base_ref || github.ref_name }}"
+          terraform init -reconfigure \
+            -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
+            -backend-config="prefix=terraform/state/${{ github.base_ref || github.ref_name }}"
+
+      - name: Cache .terraform directory
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.TF_WORKING_DIR }}/.terraform
+          key: terraform-${{ github.run_id }}
+
+  terraform-plan:
+    name: "Terraform Plan"
+    needs: terraform-init
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+          export_environment_variables: true
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Restore .terraform cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.TF_WORKING_DIR }}/.terraform
+          key: terraform-${{ github.run_id }}
+
       - name: Terraform Plan
         run: |
           terraform plan -no-color -input=false \
@@ -50,27 +85,42 @@ jobs:
             -var="repo_name=${{ github.event.repository.name }}" \
             -var="github_token=${{ secrets.GH_PAT }}"
 
-  terraform-apply:
-    name: "Terraform Apply"
+  wait-for-approval:
+    name: "Waiting for Manual Approval"
     needs: terraform-plan
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    # YAHAN ENVIRONMENT RAKHA HAI, ISILIYE YE MANUAL APPROVAL MAANGEGA
     environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
+    steps:
+      - name: Approval Received
+        run: echo "✅ Manual approval received! Proceeding to Terraform Apply..."
+
+  terraform-apply:
+    name: "Terraform Apply"
+    needs: wait-for-approval
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
     steps:
       - uses: actions/checkout@v4
-      - id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
           export_environment_variables: true
+
       - uses: hashicorp/setup-terraform@v3
+
       - name: Terraform Init
-        run: terraform init -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" -backend-config="prefix=terraform/state/${{ github.ref_name }}"
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
+            -backend-config="prefix=terraform/state/${{ github.ref_name }}"
+
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve -input=false \
@@ -85,20 +135,22 @@ jobs:
     needs: terraform-apply
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
-      - id: 'auth'
-        uses: 'google-github-actions/auth@v2'
+
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
-      - name: 'Set up GKE credentials'
-        uses: 'google-github-actions/get-gke-credentials@v2'
+
+      - name: Set up GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: 'xynapse-dev-gke'
           location: 'asia-south1'
-      - name: 'Deploy ARC via Helm'
+
+      - name: Deploy ARC via Helm
         run: chmod +x infrastructure/scripts/deploy-arc.sh && ./infrastructure/scripts/deploy-arc.sh
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}

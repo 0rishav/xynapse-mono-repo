@@ -3,6 +3,11 @@ provider "google" {
   region  = var.region
 }
 
+import {
+  id = "projects/xynapse-system/global/networks/xynapse-dev-vpc"
+  to = module.vpc.google_compute_network.main
+}
+
 # 1. VPC Module
 module "vpc" {
   source              = "../../modules/vpc"

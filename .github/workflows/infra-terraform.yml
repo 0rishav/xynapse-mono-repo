@@ -31,7 +31,7 @@ jobs:
       TF_WORKING_DIR: >-
         ${{ (contains(github.ref, 'main') || contains(github.ref, 'release') || contains(github.base_ref, 'main') || contains(github.base_ref, 'release')) 
             && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/dev' }}
+            || './infrastructure/terraform/environments/stage' }}
 
     defaults:
       run:
@@ -46,7 +46,11 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_SA_EMAIL }}
+          # Dynamic SA selection based on branch
+          service_account: >-
+            ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
+                github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
+                'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -57,22 +61,11 @@ jobs:
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.base_ref || github.ref_name }}"
 
-      - name: Get GitHub Runner Token
-        id: runner_token
-        run: |
-          TOKEN=$(curl -s -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/runners/registration-token | jq -r .token)
-          echo "token=$TOKEN" >> $GITHUB_OUTPUT
-
       - name: Terraform Plan
-        id: plan
         run: |
           terraform plan -no-color -input=false \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="job_id=${{ github.run_id }}" \
-            -var="repo_owner=${{ github.repository_owner }}" \
-            -var="repo_name=${{ github.event.repository.name }}" \
-            -var="github_token=${{ steps.runner_token.outputs.token }}"
+            -var="job_id=${{ github.run_id }}"
 
   terraform-apply:
     name: "Terraform Apply"
@@ -81,16 +74,16 @@ jobs:
     runs-on: ubuntu-latest
     
     environment: >-
-      ${{ github.ref == 'refs/heads/main' && 'production' || 
-          github.ref == 'refs/heads/release' && 'release' || 
+      ${{ github.ref_name == 'main' && 'production' || 
+          github.ref_name == 'release' && 'release' || 
           'staging' 
       }}
 
     env:
       TF_WORKING_DIR: >-
-        ${{ (contains(github.ref, 'main') || contains(github.ref, 'release')) 
+        ${{ (github.ref_name == 'main' || github.ref_name == 'release') 
             && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/dev' }}
+            || './infrastructure/terraform/environments/stage' }}
 
     defaults:
       run:
@@ -105,7 +98,11 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_SA_EMAIL }}
+          # Dynamic SA selection (Same as plan)
+          service_account: >-
+            ${{ github.ref_name == 'main' && 'sa-prod@xynapse-system.iam.gserviceaccount.com' ||
+                github.ref_name == 'release' && 'sa-release@xynapse-system.iam.gserviceaccount.com' ||
+                'sa-stage@xynapse-system.iam.gserviceaccount.com' }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -116,18 +113,8 @@ jobs:
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.ref_name }}"
 
-      - name: Get GitHub Runner Token
-        id: runner_token
-        run: |
-          TOKEN=$(curl -s -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/runners/registration-token | jq -r .token)
-          echo "token=$TOKEN" >> $GITHUB_OUTPUT
-
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve -input=false \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="job_id=${{ github.run_id }}" \
-            -var="repo_owner=${{ github.repository_owner }}" \
-            -var="repo_name=${{ github.event.repository.name }}" \
-            -var="github_token=${{ steps.runner_token.outputs.token }}"
+            -var="job_id=${{ github.run_id }}"

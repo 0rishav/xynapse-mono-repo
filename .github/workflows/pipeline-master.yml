@@ -15,7 +15,7 @@ on:
 jobs:
   # DECISION MAKER
   detect-changes:
-    runs-on: ubuntu-latest  # self-hosted se ubuntu-latest kiya
+    runs-on: [self-hosted, xynapse-runner-set]
     outputs:
       services: ${{ steps.filter.outputs.changes }}
     steps:
@@ -35,7 +35,7 @@ jobs:
   analyze:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, xynapse-runner-set]
     permissions:
       actions: read
       contents: read
@@ -55,7 +55,7 @@ jobs:
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: xynapse-runner-set
+    runs-on: [self-hosted, xynapse-runner-set]
     strategy:
       fail-fast: false
       matrix:
@@ -90,21 +90,20 @@ jobs:
           image_tag: ${{ env.NEW_TAG }}
           slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  # APPROVAL GATE - SIRF EK BAAR APPROVE KARO
+  # APPROVAL GATE
   wait-for-approval:
     needs: build
     if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, xynapse-runner-set]
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/release' && 'release' || 'staging' }}
     steps:
       - name: Approval Received
         run: echo "✅ Approved! Deploying all services..."
 
-
   deploy:
     needs: [detect-changes, wait-for-approval]
     if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, xynapse-runner-set]
     permissions:
       contents: write
       id-token: write

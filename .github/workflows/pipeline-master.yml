@@ -49,11 +49,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: 'javascript'
+          build-mode: manual
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 

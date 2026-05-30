@@ -10,13 +10,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # CLEANUP TMP
-    - name: Cleanup Runner Environment
-      shell: bash
-      run: |
-        sudo rm -rf /tmp/gitleaks.tmp /tmp/gitleaks-8.24.3 || true
-        docker system prune -f --filter "until=24h" || true
-
     # SECRET DETECTION
     - name: Secret Detection
       uses: gitleaks/gitleaks-action@v2
@@ -34,60 +27,61 @@ runs:
         chmod +x .github/scripts/docker-audit.sh
         ./.github/scripts/docker-audit.sh apps/${{ inputs.service_name }}-service/Dockerfile
 
-    # SETUP BUILDX
-    - name: Setup Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    # ARTIFACT REGISTRY AUTH
-    - name: Ensure Artifact Registry Repo & Auth
-      shell: bash
-      run: |
-        if ! gcloud artifacts repositories describe xynapse-mono-repo --location=us-central1 --project=${{ inputs.project_id }} >/dev/null 2>&1; then
-          gcloud artifacts repositories create xynapse-mono-repo \
-            --repository-format=docker \
-            --location=us-central1 \
-            --project=${{ inputs.project_id }}
-        fi
-        gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-
-    # EK HI BAAR BUILD KARO - LOAD KARKE SCAN KARO
-    - name: Build Image Locally
-      shell: bash
-      run: |
-        IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}"
-        docker buildx build \
-          --load \
-          -t test-image:${{ github.sha }} \
-          --cache-from type=registry,ref=${IMAGE}:cache \
-          --build-arg BUILDKIT_INLINE_CACHE=1 \
-          -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
-
-    # TRIVY SCAN - PINNED VERSION
-    - name: Trivy Security Scan
+    # TRIVY SCAN - Kaniko se pehle source scan
+    - name: Trivy Filesystem Scan
       uses: aquasecurity/trivy-action@0.30.0
       with:
-        image-ref: 'test-image:${{ github.sha }}'
+        scan-type: 'fs'
+        scan-ref: './apps/${{ inputs.service_name }}-service'
         format: 'json'
         output: 'report-${{ inputs.service_name }}.json'
         severity: 'CRITICAL,HIGH'
         exit-code: '0'
 
-    # TAG KARO AUR PUSH KARO - DOBARA BUILD NAHI
-    - name: Tag and Push to Artifact Registry
+    # KANIKO BUILD + PUSH
+    - name: Build and Push with Kaniko
       shell: bash
       run: |
         IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}"
-        docker tag test-image:${{ github.sha }} ${IMAGE}:${{ github.sha }}
-        docker tag test-image:${{ github.sha }} ${IMAGE}:${{ inputs.image_tag }}
-        docker tag test-image:${{ github.sha }} ${IMAGE}:latest
-        docker push ${IMAGE}:${{ github.sha }}
-        docker push ${IMAGE}:${{ inputs.image_tag }}
-        docker push ${IMAGE}:latest
-        # Cache update
-        docker buildx build \
-          --push \
-          --cache-to type=registry,ref=${IMAGE}:cache,mode=max \
-          -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
+
+        cat <<EOF > /tmp/kaniko-job-${{ inputs.service_name }}.yaml
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          name: kaniko-${{ github.run_id }}-${{ inputs.service_name }}
+          namespace: arc-runners
+        spec:
+          ttlSecondsAfterFinished: 300
+          template:
+            spec:
+              serviceAccountName: kaniko-sa
+              restartPolicy: Never
+              containers:
+                - name: kaniko
+                  image: gcr.io/kaniko-project/executor:latest
+                  args:
+                    - "--context=git://github.com/${{ github.repository }}#refs/heads/${{ github.ref_name }}"
+                    - "--git=branch=${{ github.ref_name }}"
+                    - "--dockerfile=apps/${{ inputs.service_name }}-service/Dockerfile"
+                    - "--destination=${IMAGE}:${{ github.sha }}"
+                    - "--destination=${IMAGE}:${{ inputs.image_tag }}"
+                    - "--destination=${IMAGE}:latest"
+                    - "--cache=true"
+                    - "--cache-repo=${IMAGE}-cache"
+                  env:
+                    - name: GOOGLE_APPLICATION_CREDENTIALS
+                      value: /var/run/secrets/token
+        EOF
+
+        kubectl apply -f /tmp/kaniko-job-${{ inputs.service_name }}.yaml
+
+        echo "Waiting for Kaniko job to complete..."
+        kubectl wait --for=condition=complete \
+          job/kaniko-${{ github.run_id }}-${{ inputs.service_name }} \
+          -n arc-runners \
+          --timeout=600s
+
+        echo "Build successful!"
 
     # COSIGN SIGNING
     - name: Install Cosign
@@ -111,6 +105,14 @@ runs:
         echo "| **Infra Audit** | Passed | Docker-Audit |" >> $GITHUB_STEP_SUMMARY
         echo "| **Vulnerabilities** | Scanned | Trivy |" >> $GITHUB_STEP_SUMMARY
         echo "| **Registry Status** | Pushed & Signed | GCR |" >> $GITHUB_STEP_SUMMARY
+
+    # CLEANUP KANIKO JOB
+    - name: Cleanup Kaniko Job
+      shell: bash
+      if: always()
+      run: |
+        kubectl delete job kaniko-${{ github.run_id }}-${{ inputs.service_name }} \
+          -n arc-runners --ignore-not-found=true
 
     # ARCHIVE
     - name: Archive Security Reports

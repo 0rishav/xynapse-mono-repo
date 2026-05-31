@@ -10,25 +10,22 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # CACHE RESTORE FROM GCR
     - name: Restore Cache from GCR
       shell: bash
       run: |
         CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
         CONTAINER_NAME="cache-data-${{ inputs.service_name }}-${{ github.run_id }}"
-        echo "Attempting to pull cache..."
         docker rm -f $CONTAINER_NAME || true
         if docker pull $CACHE_IMAGE 2>/dev/null; then
           echo "Cache found, extracting..."
           docker create --name $CONTAINER_NAME $CACHE_IMAGE /bin/true
-          docker cp $CONTAINER_NAME:/data ./cache_data || mkdir -p ./cache_data/trivy
+          docker cp $CONTAINER_NAME:/data/trivy ./cache_data/trivy || mkdir -p ./cache_data/trivy
           docker rm $CONTAINER_NAME
         else
-          echo "No existing cache found."
+          echo "No cache found."
           mkdir -p ./cache_data/trivy
         fi
 
-    # SECRET DETECTION
     - name: Secret Detection
       uses: gitleaks/gitleaks-action@v2
       env:
@@ -38,14 +35,12 @@ runs:
         report-path: gitleaks-report-${{ inputs.service_name }}.json
       continue-on-error: true
 
-    # DOCKERFILE AUDIT
     - name: Dockerfile Guard
       shell: bash
       run: |
         chmod +x .github/scripts/docker-audit.sh
         ./.github/scripts/docker-audit.sh apps/${{ inputs.service_name }}-service/Dockerfile
 
-    # TRIVY SCAN
     - name: Trivy Filesystem Scan
       uses: aquasecurity/trivy-action@v0.35.0
       continue-on-error: true
@@ -58,7 +53,6 @@ runs:
         severity: 'CRITICAL,HIGH'
         exit-code: '0'
 
-    # DOCKER BUILD + PUSH
     - name: Build and Push to Artifact Registry
       shell: bash
       run: |
@@ -75,11 +69,8 @@ runs:
           docker push ${IMAGE}:latest
         fi
 
-    # COSIGN SIGNING
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3.5.0
-      with:
-        cosign-release: 'v2.4.0'
 
     - name: Sign Image
       shell: bash
@@ -91,22 +82,21 @@ runs:
         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
         cosign sign --yes ${IMAGE_REF}
 
-    # CACHE SAVE - SIRF TRIVY DATA
     - name: Save Cache to GCR
       shell: bash
       if: always()
       run: |
         mkdir -p ./cache_data/trivy
         CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
-        cat > Dockerfile.cache.${{ inputs.service_name }} << 'DOCKERFILE'
-        FROM scratch
-        COPY ./cache_data/trivy /data/trivy
-        DOCKERFILE
-        docker build -t $CACHE_IMAGE -f Dockerfile.cache.${{ inputs.service_name }} .
+        BUILD_DIR="/tmp/cache-build-${{ inputs.service_name }}"
+        mkdir -p ${BUILD_DIR}/trivy
+        cp -r ./cache_data/trivy/. ${BUILD_DIR}/trivy/ 2>/dev/null || true
+        echo 'FROM busybox' > ${BUILD_DIR}/Dockerfile
+        echo 'COPY trivy /data/trivy' >> ${BUILD_DIR}/Dockerfile
+        docker build -t $CACHE_IMAGE -f ${BUILD_DIR}/Dockerfile ${BUILD_DIR}/
         docker push $CACHE_IMAGE
-        rm -f Dockerfile.cache.${{ inputs.service_name }}
+        rm -rf ${BUILD_DIR}
 
-    # SUMMARY
     - name: Generate Build Summary
       shell: bash
       if: always()
@@ -119,7 +109,6 @@ runs:
         echo "| **Vulnerabilities** | Scanned | Trivy |" >> $GITHUB_STEP_SUMMARY
         echo "| **Registry Status** | Pushed & Signed | GCR |" >> $GITHUB_STEP_SUMMARY
 
-    # ARCHIVE
     - name: Archive Security Reports
       uses: actions/upload-artifact@v4
       if: always()
@@ -130,7 +119,6 @@ runs:
           gitleaks-report-${{ inputs.service_name }}.json
         retention-days: 7
 
-    # SLACK NOTIFY
     - name: Notify Slack
       if: always()
       shell: bash

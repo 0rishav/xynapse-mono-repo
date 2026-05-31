@@ -12,9 +12,7 @@ import healthRouter from "./routes/health.js";
 const app = express();
 
 console.log("hello")
-console.log("hello")
-console.log("hello")
-console.log("hello")
+
 
 app.use(httpLogger);
 app.use(cors({ origin: config.cors.origin, credentials: true }));

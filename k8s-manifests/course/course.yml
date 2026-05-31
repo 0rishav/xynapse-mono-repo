@@ -31,22 +31,19 @@ spec:
           {{- end }}
           {{- end -}}
     spec:
+      serviceAccountName: default
       containers:
       - name: course
         image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/course:v1.0.1
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # 1. Wait for vault file with content
+            
             while [ ! -s /vault/secrets/config ]; do echo "Waiting for secrets..."; sleep 2; done;
             
-            # 2. Source the variables with export enforcement
             set -a
             . /vault/secrets/config
             set +a
-            
-            # 3. Path Fix: Agar Dockerfile WORKDIR set hai toh seedha src/index.js chalega
-            # Agar fir bhi phate toh yahan full path daal dena: node /app/apps/course-service/src/index.js
             node src/index.js 
         ports:
         - containerPort: 8002

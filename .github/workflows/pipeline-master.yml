@@ -81,6 +81,7 @@ jobs:
           create_credentials_file: true
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
+          export_environment_variables: true
 
       - name: Generate Semantic Version
         id: semver

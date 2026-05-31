@@ -39,7 +39,6 @@ runs:
         exit-code: '0'
 
     # DOCKER BUILD + PUSH
-    # DOCKER BUILD + PUSH
     - name: Build and Push to Artifact Registry
       shell: bash
       run: |
@@ -70,10 +69,14 @@ runs:
       env:
         COSIGN_CACHE: ${{ runner.temp }}/.cosign_cache
         HOME: ${{ runner.temp }}
+        # GCLOUD auth ko cosign ke liye map karna
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
       run: |
         IMAGE_REF="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.image_tag }}"
-        # Binaries ka path handle karne ke liye absolute path use karein
-        $(which cosign) sign --yes ${IMAGE_REF}
+        
+        # '--yes' flag ke saath sign karein
+        # Agar error aaye, toh auth ko force-verify karne ke liye gcloud login ka token use hota hai
+        cosign sign --yes ${IMAGE_REF}
 
     # SUMMARY
     - name: Generate Build Summary

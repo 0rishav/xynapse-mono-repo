@@ -13,9 +13,8 @@ on:
       - 'packages/common/**'
 
 jobs:
-  # DECISION MAKER
   detect-changes:
-    runs-on: [xynapse-runner-set]
+    runs-on: ubuntu-latest  # ← fix
     outputs:
       services: ${{ steps.filter.outputs.changes }}
     steps:
@@ -31,11 +30,10 @@ jobs:
             mcq: ['apps/mcq-service/**', 'packages/common/**']
             gateway: ['apps/gateway-service/**', 'packages/common/**']
 
-  # CODE QUALITY
   analyze:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: [xynapse-runner-set]
+    runs-on: ubuntu-latest  # ← fix
     permissions:
       actions: read
       contents: read
@@ -49,7 +47,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
@@ -61,7 +58,7 @@ jobs:
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: [xynapse-runner-set]
+    runs-on: xynapse-runner-set  # ← sirf yahi ARC pe
     strategy:
       fail-fast: false
       matrix:
@@ -96,11 +93,10 @@ jobs:
           image_tag: ${{ env.NEW_TAG }}
           slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  # APPROVAL GATE
   wait-for-approval:
     needs: build
     if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
-    runs-on: [self-hosted, xynapse-runner-set]
+    runs-on: ubuntu-latest  # ← fix
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/release' && 'release' || 'staging' }}
     steps:
       - name: Approval Received
@@ -109,7 +105,7 @@ jobs:
   deploy:
     needs: [detect-changes, wait-for-approval]
     if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
-    runs-on: [xynapse-runner-set]
+    runs-on: ubuntu-latest  # ← fix
     permissions:
       contents: write
       id-token: write

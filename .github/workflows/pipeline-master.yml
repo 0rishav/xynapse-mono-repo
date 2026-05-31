@@ -14,7 +14,7 @@ on:
 
 jobs:
   detect-changes:
-    runs-on: ubuntu-latest  # ← fix
+    runs-on: ubuntu-latest
     outputs:
       services: ${{ steps.filter.outputs.changes }}
     steps:
@@ -33,7 +33,7 @@ jobs:
   analyze:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: ubuntu-latest  # ← fix
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
@@ -58,7 +58,8 @@ jobs:
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: xynapse-runner-set  # ← sirf yahi ARC pe
+    # FIX: Yahan 'xynapse-runner-set' ki jagah 'self-hosted' use karein
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +97,7 @@ jobs:
   wait-for-approval:
     needs: build
     if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
-    runs-on: ubuntu-latest  # ← fix
+    runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/release' && 'release' || 'staging' }}
     steps:
       - name: Approval Received
@@ -105,7 +106,7 @@ jobs:
   deploy:
     needs: [detect-changes, wait-for-approval]
     if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
-    runs-on: ubuntu-latest  # ← fix
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write

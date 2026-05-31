@@ -39,19 +39,25 @@ runs:
         exit-code: '0'
 
     # DOCKER BUILD + PUSH
+    # DOCKER BUILD + PUSH
     - name: Build and Push to Artifact Registry
       shell: bash
       run: |
         IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}"
         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-        docker build \
-          -t ${IMAGE}:${{ github.sha }} \
-          -t ${IMAGE}:${{ inputs.image_tag }} \
-          -t ${IMAGE}:latest \
-          -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
+        
+        # Build image with SHA and Input Tag
+        docker build -t ${IMAGE}:${{ github.sha }} -t ${IMAGE}:${{ inputs.image_tag }} -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
+        
+        # Push specific tags
         docker push ${IMAGE}:${{ github.sha }}
         docker push ${IMAGE}:${{ inputs.image_tag }}
-        docker push ${IMAGE}:latest
+        
+        # Push 'latest' ONLY if it's main branch to avoid race conditions
+        if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
+          docker push ${IMAGE}:latest
+        fi
 
     # COSIGN SIGNING
     - name: Install Cosign

@@ -18,10 +18,10 @@ runs:
         CONTAINER_NAME="cache-data-${{ inputs.service_name }}-${{ github.run_id }}"
         echo "Attempting to pull cache..."
         docker rm -f $CONTAINER_NAME || true
-        if docker pull $CACHE_IMAGE; then
+        if docker pull $CACHE_IMAGE 2>/dev/null; then
           echo "Cache found, extracting..."
           docker create --name $CONTAINER_NAME $CACHE_IMAGE /bin/true
-          docker cp $CONTAINER_NAME:/data ./cache_data
+          docker cp $CONTAINER_NAME:/data ./cache_data || mkdir -p ./cache_data/trivy
           docker rm $CONTAINER_NAME
         else
           echo "No existing cache found."
@@ -79,7 +79,7 @@ runs:
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3.5.0
       with:
-        cosign-release: 'v2.2.4'
+        cosign-release: 'v2.4.0'
 
     - name: Sign Image
       shell: bash
@@ -91,17 +91,17 @@ runs:
         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
         cosign sign --yes ${IMAGE_REF}
 
-    # CACHE SAVE TO GCR
+    # CACHE SAVE - SIRF TRIVY DATA
     - name: Save Cache to GCR
       shell: bash
       if: always()
       run: |
-        CONTAINER_NAME="cache-data-${{ inputs.service_name }}-${{ github.run_id }}"
-        docker rm -f $CONTAINER_NAME || true
         mkdir -p ./cache_data/trivy
         CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
-        echo "FROM scratch" > Dockerfile.cache.${{ inputs.service_name }}
-        echo "COPY ./cache_data /data" >> Dockerfile.cache.${{ inputs.service_name }}
+        cat > Dockerfile.cache.${{ inputs.service_name }} << 'DOCKERFILE'
+        FROM scratch
+        COPY ./cache_data/trivy /data/trivy
+        DOCKERFILE
         docker build -t $CACHE_IMAGE -f Dockerfile.cache.${{ inputs.service_name }} .
         docker push $CACHE_IMAGE
         rm -f Dockerfile.cache.${{ inputs.service_name }}

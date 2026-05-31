@@ -37,8 +37,6 @@ dotenv.config({ path: rootEnvPath });
 
 console.log("App starting...");
 console.log("App starting...");
-console.log("App starting...");
-console.log("App starting...");
 
 
 

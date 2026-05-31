@@ -62,12 +62,18 @@ runs:
     # COSIGN SIGNING
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3.5.0
+      with:
+        cosign-release: 'v2.2.4'
 
     - name: Sign Image
       shell: bash
+      env:
+        COSIGN_CACHE: ${{ runner.temp }}/.cosign_cache
+        HOME: ${{ runner.temp }}
       run: |
         IMAGE_REF="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.image_tag }}"
-        cosign sign --yes ${IMAGE_REF}
+        # Binaries ka path handle karne ke liye absolute path use karein
+        $(which cosign) sign --yes ${IMAGE_REF}
 
     # SUMMARY
     - name: Generate Build Summary

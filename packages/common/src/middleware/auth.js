@@ -20,6 +20,8 @@ export const isAuthenticated = CatchAsyncError(async (req, res, next) => {
     const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
     console.log(decodedToken)
+    console.log(decodedToken)
+
 
     req.user = {
       _id: decodedToken._id,

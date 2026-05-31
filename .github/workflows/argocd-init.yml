@@ -1,0 +1,43 @@
+name: "One-Time: ArgoCD Setup"
+
+on: 
+  workflow_dispatch: 
+
+jobs:
+  setup-argo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Google OIDC Auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Get GKE Credentials
+        uses: 'google-github-actions/get-gke-credentials@v2'
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER_NAME }}
+          location: ${{ secrets.GKE_LOCATION }}
+
+      - name: Install ArgoCD Core
+        run: |
+          kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+      - name: Connect GitHub Repo to ArgoCD
+        run: |
+          kubectl create secret generic repo-secret \
+            --from-literal=url=https://github.com/${{ github.repository }} \
+            --from-literal=password=${{ secrets.GH_PAT }} \
+            --from-literal=username=git-bot \
+            -n argocd || echo "Secret already exists"
+          
+          kubectl label secret repo-secret argocd.argoproj.io/secret-type=repository -n argocd
+
+      - name: Apply Root Application
+        run: |
+          ls -la ${{ github.workspace }}/argocd-master-app.yml
+          kubectl apply -f ${{ github.workspace }}/argocd-master-app.yml

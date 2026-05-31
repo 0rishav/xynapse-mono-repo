@@ -1,5 +1,5 @@
 variable "project_id" {
-  description = "The GCP Project ID"
+  description = "The GCP Project IDss"
   type        = string
 }
 
@@ -15,7 +15,7 @@ variable "job_id" {
 }
 
 variable "repo_owner" {
-  description = "GitHub username or org"
+  description = "GitHub username or organization"
   type        = string
 }
 

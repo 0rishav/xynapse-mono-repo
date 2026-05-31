@@ -6,24 +6,25 @@ on:
     paths:
       - 'apps/**'
       - 'packages/common/**'
-  
   push:
     branches: [main, release, stage]
     paths:
       - 'apps/**'
       - 'packages/common/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
-  # DECISION MAKER
   detect-changes:
-    runs-on: [self-hosted] 
+    runs-on: ubuntu-latest
     outputs:
       services: ${{ steps.filter.outputs.changes }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -33,11 +34,10 @@ jobs:
             mcq: ['apps/mcq-service/**', 'packages/common/**']
             gateway: ['apps/gateway-service/**', 'packages/common/**']
 
-  # CODE QUALITY
   analyze:
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
@@ -46,60 +46,99 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
-
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: 'javascript' 
-
+          languages: 'javascript'
+          build-mode: none
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-  # HIGH-PERFORMANCE BUILD
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    
-    runs-on: >-
-      ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release') 
-            && 'arc-runner-prod-fresh' || 'arc-runner-dev-fresh' }}
-    
-    environment: >-
-      ${{ github.ref == 'refs/heads/main' && 'production' || 
-          github.ref == 'refs/heads/release' && 'release' || 
-          'staging' }}
-
+    runs-on: self-hosted
     strategy:
-      fail-fast: false 
+      fail-fast: true
       matrix:
         service: ${{ fromJson(needs.detect-changes.outputs.services) }}
-    
     permissions:
-      contents: read
-      id-token: write 
+      contents: write
+      id-token: write
       security-events: write
-
+      packages: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - name: Google OIDC Auth
         uses: 'google-github-actions/auth@v2'
         with:
-          token_format: 'access_token'     
-          create_credentials_file: true    
+          token_format: 'access_token'
+          create_credentials_file: true
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
+          export_environment_variables: true
 
-      - name: Docker Login (GCR)
-        run: gcloud auth configure-docker gcr.io --quiet 
+      - name: Generate Semantic Version
+        id: semver
+        run: bash .github/scripts/generate-semantic-version.sh ${{ matrix.service }}
 
       - name: Execute Smart Build
         uses: ./.github/actions/smart-build
         with:
           service_name: ${{ matrix.service }}
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+          image_tag: ${{ env.NEW_TAG }}
           slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  wait-for-approval:
+    needs: build
+    if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/release' && 'release' || 'staging' }}
+    steps:
+      - name: Approval Received
+        run: echo "✅ Approved! Deploying all services..."
+
+  deploy:
+    needs: [detect-changes, wait-for-approval]
+    if: ${{ needs.detect-changes.outputs.services != '[]' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Google OIDC Auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Get Version
+        run: bash .github/scripts/generate-semantic-version.sh ${{ matrix.service }}
+
+      - name: Run Smart Deploy
+        uses: ./.github/actions/smart-deploy
+        with:
+          service_name: ${{ matrix.service }}
+          new_version: ${{ env.NEW_TAG }}
+          github_token: ${{ secrets.GH_PAT }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}

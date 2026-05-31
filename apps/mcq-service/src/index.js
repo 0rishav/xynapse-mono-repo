@@ -21,6 +21,7 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.MCQ_PORT || 5001;
 const ENVIRONMENT = process.env.NODE_ENV;
+console.log(ENVIRONMENT)
 const startServer = async () => {
   try {
     console.log("Connecting to DB...");

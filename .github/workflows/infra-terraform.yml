@@ -2,18 +2,11 @@ name: "Infrastructure Deployment"
 
 on:
   push:
-    branches:
-      - stage
-      - main
-      - release
-    paths:
-      - 'infrastructure/terraform/**'
+    branches: [ stage, main, release ]
+    paths: [ 'infrastructure/terraform/**' ]
   pull_request:
-    branches:
-      - main
-      - release
-    paths:
-      - 'infrastructure/terraform/**'
+    branches: [ main, release ]
+    paths: [ 'infrastructure/terraform/**' ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,105 +16,80 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  TF_WORKING_DIR: ${{ (github.ref_name == 'main' || github.ref_name == 'release' || github.base_ref == 'main' || github.base_ref == 'release') && './infrastructure/terraform/environments/prod' || './infrastructure/terraform/environments/dev' }}
+
 jobs:
   terraform-plan:
-    name: "Terraform Plan"
+    name: "Terraform Init & Plan"
     runs-on: ubuntu-latest
-    env:
-      TF_WORKING_DIR: >-
-        ${{ (contains(github.ref, 'main') || contains(github.ref, 'release') || contains(github.base_ref, 'main') || contains(github.base_ref, 'release')) 
-            && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/dev' }}
-
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@v2'
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
+          export_environment_variables: true
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         run: |
-          terraform init \
+          rm -rf .terraform
+          terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.base_ref || github.ref_name }}"
 
-      - name: Get GitHub Runner Token
-        id: runner_token
-        run: |
-          TOKEN=$(curl -s -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/runners/registration-token | jq -r .token)
-          echo "token=$TOKEN" >> $GITHUB_OUTPUT
-
       - name: Terraform Plan
-        id: plan
         run: |
           terraform plan -no-color -input=false \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="job_id=${{ github.run_id }}" \
             -var="repo_owner=${{ github.repository_owner }}" \
             -var="repo_name=${{ github.event.repository.name }}" \
-            -var="github_token=${{ steps.runner_token.outputs.token }}"
+            -var="github_token=${{ secrets.GH_PAT }}"
 
-  terraform-apply:
-    name: "Terraform Apply"
+  wait-for-approval:
+    name: "Waiting for Manual Approval"
     needs: terraform-plan
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    
-    environment: >-
-      ${{ github.ref == 'refs/heads/main' && 'production' || 
-          github.ref == 'refs/heads/release' && 'release' || 
-          'staging' 
-      }}
+    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'release' && 'release' || 'staging' }}
+    steps:
+      - name: Approval Received
+        run: echo "✅ Manual approval received! Proceeding to Terraform Apply..."
 
-    env:
-      TF_WORKING_DIR: >-
-        ${{ (contains(github.ref, 'main') || contains(github.ref, 'release')) 
-            && './infrastructure/terraform/environments/prod' 
-            || './infrastructure/terraform/environments/dev' }}
-
+  terraform-apply:
+    name: "Terraform Apply"
+    needs: wait-for-approval
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@v2'
+      - id: auth
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SA_EMAIL }}
+          export_environment_variables: true
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
         run: |
-          terraform init \
+          rm -rf .terraform
+          terraform init -reconfigure \
             -backend-config="bucket=${{ secrets.GCS_BUCKET_NAME }}" \
             -backend-config="prefix=terraform/state/${{ github.ref_name }}"
-
-      - name: Get GitHub Runner Token
-        id: runner_token
-        run: |
-          TOKEN=$(curl -s -X POST -H "Authorization: token ${{ secrets.GH_PAT }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/runners/registration-token | jq -r .token)
-          echo "token=$TOKEN" >> $GITHUB_OUTPUT
 
       - name: Terraform Apply
         run: |
@@ -130,4 +98,39 @@ jobs:
             -var="job_id=${{ github.run_id }}" \
             -var="repo_owner=${{ github.repository_owner }}" \
             -var="repo_name=${{ github.event.repository.name }}" \
-            -var="github_token=${{ steps.runner_token.outputs.token }}"
+            -var="github_token=${{ secrets.GH_PAT }}"
+
+  deploy-arc:
+    name: "Deploy ARC Controller"
+    needs: terraform-apply
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          sudo apt-get install -y apt-transport-https ca-certificates gnupg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+          sudo apt-get update && sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+
+      - name: Set up GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: 'xynapse-dev-gke'
+          location: 'us-central1'
+
+      - name: Deploy ARC via Helm
+        run: chmod +x infrastructure/scripts/deploy-arc.sh && ./infrastructure/scripts/deploy-arc.sh
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}

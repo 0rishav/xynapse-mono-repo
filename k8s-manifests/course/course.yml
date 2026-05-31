@@ -34,7 +34,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: course
-        image: us-central1-docker.pkg.dev/project-5e783ec5-d363-4cc7-884/xynapse-mono-repo/course:v1.0.1
+        image: us-central1-docker.pkg.dev/xynapse-system/xynapse-mono-repo/course:v1.0.1
         command: ["/bin/sh", "-c"]
         args:
           - |

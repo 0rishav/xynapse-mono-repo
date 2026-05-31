@@ -10,6 +10,18 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # CACHE RESTORE FROM GCR
+    - name: Restore Cache from GCR
+      shell: bash
+      run: |
+        CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
+        docker pull $CACHE_IMAGE || echo "No cache found"
+        if docker inspect $CACHE_IMAGE >/dev/null 2>&1; then
+          docker create --name cache-data $CACHE_IMAGE
+          docker cp cache-data:/data ./cache_data
+          docker rm cache-data
+        fi
+
     # SECRET DETECTION
     - name: Secret Detection
       uses: gitleaks/gitleaks-action@v2
@@ -32,6 +44,7 @@ runs:
       uses: aquasecurity/trivy-action@v0.35.0
       with:
         scan-type: 'fs'
+        cache-dir: ./cache_data/trivy
         scan-ref: './apps/${{ inputs.service_name }}-service'
         format: 'json'
         output: 'report-${{ inputs.service_name }}.json'
@@ -44,15 +57,9 @@ runs:
       run: |
         IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}"
         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-        
-        # Build image with SHA and Input Tag
         docker build -t ${IMAGE}:${{ github.sha }} -t ${IMAGE}:${{ inputs.image_tag }} -f ./apps/${{ inputs.service_name }}-service/Dockerfile .
-        
-        # Push specific tags
         docker push ${IMAGE}:${{ github.sha }}
         docker push ${IMAGE}:${{ inputs.image_tag }}
-        
-        # Push 'latest' ONLY if it's main branch to avoid race conditions
         if [ "${{ github.ref }}" == "refs/heads/main" ]; then
           docker tag ${IMAGE}:${{ github.sha }} ${IMAGE}:latest
           docker push ${IMAGE}:latest
@@ -73,6 +80,18 @@ runs:
         IMAGE_REF="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-mono-repo/${{ inputs.service_name }}:${{ inputs.image_tag }}"
         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
         cosign sign --yes ${IMAGE_REF}
+
+    # CACHE SAVE TO GCR
+    - name: Save Cache to GCR
+      shell: bash
+      if: always()
+      run: |
+        mkdir -p ./cache_data/trivy
+        echo "FROM scratch" > Dockerfile.cache
+        echo "COPY ./cache_data /data" >> Dockerfile.cache
+        CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
+        docker build -t $CACHE_IMAGE -f Dockerfile.cache .
+        docker push $CACHE_IMAGE
 
     # SUMMARY
     - name: Generate Build Summary

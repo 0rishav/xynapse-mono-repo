@@ -16,6 +16,10 @@ runs:
       run: |
         CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
         echo "Attempting to pull cache..."
+        
+        # Cleanup pehle hi kar do taaki koi conflict na ho
+        docker rm -f cache-data || true
+        
         if docker pull $CACHE_IMAGE; then
           echo "Cache found, extracting..."
           docker create --name cache-data $CACHE_IMAGE /bin/true
@@ -97,6 +101,22 @@ runs:
         CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
         docker build -t $CACHE_IMAGE -f Dockerfile.cache .
         docker push $CACHE_IMAGE
+    
+    - name: Update Cache in GCR
+      shell: bash
+      if: always()
+      run: |
+        # Purana temporary container hatao
+        docker rm -f cache-data || true
+        
+        mkdir -p ./cache_data/trivy
+        echo "FROM scratch" > Dockerfile.cache
+        echo "COPY ./cache_data /data" >> Dockerfile.cache
+        
+        CACHE_IMAGE="us-central1-docker.pkg.dev/${{ inputs.project_id }}/xynapse-cache/${{ inputs.service_name }}:latest"
+        docker build -t $CACHE_IMAGE -f Dockerfile.cache .
+        docker push $CACHE_IMAGE
+        rm Dockerfile.cache
 
     # SUMMARY
     - name: Generate Build Summary

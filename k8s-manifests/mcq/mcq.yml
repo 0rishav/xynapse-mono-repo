@@ -34,7 +34,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: mcq
-        image: us-central1-docker.pkg.dev/xynapse-system/xynapse-mono-repo/mcq:v1.0.1
+        image: us-central1-docker.pkg.dev/xynapse-system/xynapse-mono-repo/mcq:v1.0.1-mcq-03e5fd1
         command: ["/bin/sh", "-c"]
         args:
           - |

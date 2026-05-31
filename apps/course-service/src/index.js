@@ -36,6 +36,8 @@ const rootEnvPath = path.resolve(__dirname, "../../../.env");
 dotenv.config({ path: rootEnvPath });
 
 console.log("App starting...");
+console.log("App starting...");
+
 
 const app = express();
 const server = http.createServer(app);

@@ -61,7 +61,6 @@ jobs:
   build:
     needs: [detect-changes, analyze]
     if: ${{ needs.detect-changes.outputs.services != '[]' }}
-    # FIX: Yahan 'xynapse-runner-set' ki jagah 'self-hosted' use karein
     runs-on: self-hosted
     strategy:
       fail-fast: true
